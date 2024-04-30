@@ -1103,6 +1103,7 @@ void manage_desktop( WCHAR *arg )
         }
         SetThreadDesktop( desktop );
     }
+    else ExitProcess( 0 );
 
     /* create the desktop window */
     hwnd = CreateWindowExW( 0, DESKTOP_CLASS_ATOM, NULL,
