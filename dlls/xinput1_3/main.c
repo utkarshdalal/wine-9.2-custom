@@ -71,7 +71,6 @@ WINE_DEFAULT_DEBUG_CHANNEL(xinput);
 
 struct xinput_controller
 {
-    CRITICAL_SECTION crit;
     XINPUT_CAPABILITIES caps;
     XINPUT_STATE state;
     XINPUT_GAMEPAD last_keystroke;
@@ -80,17 +79,8 @@ struct xinput_controller
     int id;
 };
 
-static struct xinput_controller controller;
-static CRITICAL_SECTION_DEBUG controller_critsect_debug = 
-{
-    0, 0, &controller.crit,
-    { &controller_critsect_debug.ProcessLocksList, &controller_critsect_debug.ProcessLocksList },
-      0, 0, { (DWORD_PTR)(__FILE__ ": controller.crit") }
-};
-
 static struct xinput_controller controller = 
 {
-    .crit = { &controller_critsect_debug, -1, 0, 0, 0, 0 },
     .enabled = FALSE,
     .connected = FALSE,
     .id = 0
@@ -98,9 +88,7 @@ static struct xinput_controller controller =
 
 static HMODULE xinput_instance;
 static HANDLE start_event;
-static HANDLE stop_event;
-static HANDLE done_event;
-static HANDLE update_event;
+static BOOL thread_running = FALSE;
 
 static SOCKET server_sock = INVALID_SOCKET;
 static BOOL winsock_loaded = FALSE;
@@ -125,6 +113,7 @@ static BOOL create_server_socket(void)
 {    
     WSADATA wsa_data;
     struct sockaddr_in server_addr;
+    DWORD timeout;
     int res;
     
     close_server_socket();
@@ -138,6 +127,10 @@ static BOOL create_server_socket(void)
     
     server_sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (server_sock == INVALID_SOCKET) return FALSE;
+    
+    timeout = 2000;    
+    res = setsockopt(server_sock, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout));
+    if (res < 0) return FALSE;
 
     res = bind(server_sock, (struct sockaddr*)&server_addr, sizeof(server_addr));
     if (res == SOCKET_ERROR) return FALSE;
@@ -145,42 +138,32 @@ static BOOL create_server_socket(void)
     return TRUE;
 }
 
-static int get_gamepad_request(void)
+static void get_gamepad_request(void)
 {
-    int res, client_addr_len, gamepad_id;
     char buffer[BUFFER_SIZE];
     struct sockaddr_in client_addr;
     
     client_addr.sin_family = AF_INET;
     client_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
     client_addr.sin_port = htons(CLIENT_PORT);
-    client_addr_len = sizeof(client_addr);
     
     buffer[0] = REQUEST_CODE_GET_GAMEPAD;
     buffer[1] = 1;
-    res = sendto(server_sock, buffer, BUFFER_SIZE, 0, (struct sockaddr*)&client_addr, client_addr_len);
-    if (res == SOCKET_ERROR) return 0;
-    
-    res = recvfrom(server_sock, buffer, BUFFER_SIZE, 0, (struct sockaddr*)&client_addr, &client_addr_len);
-    if (res == SOCKET_ERROR || buffer[0] != REQUEST_CODE_GET_GAMEPAD) return 0;
-    
-    memcpy(&gamepad_id, buffer + 1, 4);
-    return gamepad_id;
+    buffer[2] = 1;
+    sendto(server_sock, buffer, BUFFER_SIZE, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
 }
 
 static void release_gamepad_request(void)
 {
     char buffer[BUFFER_SIZE];
     struct sockaddr_in client_addr;
-    int client_addr_len;
     
     client_addr.sin_family = AF_INET;
     client_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
     client_addr.sin_port = htons(CLIENT_PORT);
-    client_addr_len = sizeof(client_addr);
     
     buffer[0] = REQUEST_CODE_RELEASE_GAMEPAD;
-    sendto(server_sock, buffer, BUFFER_SIZE, 0, (struct sockaddr*)&client_addr, client_addr_len);
+    sendto(server_sock, buffer, BUFFER_SIZE, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
 }
 
 static BOOL controller_check_caps(void)
@@ -201,132 +184,49 @@ static BOOL controller_check_caps(void)
     return TRUE;
 }
 
-static void controller_disable(void)
-{
-    if (!controller.enabled) return;
-    controller.enabled = FALSE;
-    SetEvent(update_event);
-}
-
 static void controller_destroy(void)
-{
-    EnterCriticalSection(&controller.crit);
-    
+{    
+    thread_running = FALSE;
     release_gamepad_request();
     xinput_min_index = 3;
     
-    if (controller.connected)
-    {
-        controller_disable();
-        controller.connected = FALSE;
-    }
+    controller.enabled = FALSE;
+    controller.connected = FALSE;
     
     close_server_socket();
-    
-    LeaveCriticalSection(&controller.crit);
-}
-
-static void controller_enable(void)
-{
-    if (controller.enabled) return;
-    controller.enabled = TRUE;
-    SetEvent(update_event);
 }
 
 static void controller_init(void)
 {
     memset(&controller.state, 0, sizeof(controller.state));
-    controller.enabled = FALSE;
-    controller.connected = TRUE;
     controller_check_caps();
-    
-    EnterCriticalSection(&controller.crit);
-    controller_enable();
-    LeaveCriticalSection(&controller.crit);
+    controller.connected = TRUE;
+    controller.enabled = TRUE;
 }
 
-static void controller_check_connection(void)
+static void controller_update_state(char *buffer)
 {
-    controller.id = 0;
-    if (server_sock == INVALID_SOCKET) create_server_socket();    
-    
-    int gamepad_id = get_gamepad_request();
-    if (gamepad_id > 0) 
-    {
-        controller.id = gamepad_id;
-        if (!controller.connected) controller_init();
-    }
-}
-
-static void stop_update_thread(void)
-{
-    ResetEvent(update_event);
-    SetEvent(stop_event);
-    WaitForSingleObject(done_event, INFINITE);
-
-    CloseHandle(start_event);
-    CloseHandle(stop_event);
-    CloseHandle(done_event);
-    CloseHandle(update_event);
-    
-    controller_destroy();
-}
-
-static void reset_xinput_state(XINPUT_STATE *state) 
-{
-    state->Gamepad.wButtons = 0;
-    state->Gamepad.bLeftTrigger = 0;
-    state->Gamepad.bRightTrigger = 0;
-    state->Gamepad.sThumbLX = 0;
-    state->Gamepad.sThumbLY = 0;
-    state->Gamepad.sThumbRX = 0;
-    state->Gamepad.sThumbRY = 0;
-}
-
-static void read_controller_state(void)
-{
-    char buffer[BUFFER_SIZE];
-    int i, res, client_addr_len, gamepad_id;
+    int i, gamepad_id;
     char dpad;
     short buttons, thumb_lx, thumb_ly, thumb_rx, thumb_ry;
-    struct sockaddr_in client_addr;
     XINPUT_STATE state;
     
-    reset_xinput_state(&state);
-    
-    client_addr.sin_family = AF_INET;
-    client_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
-    client_addr.sin_port = htons(CLIENT_PORT);
-    client_addr_len = sizeof(client_addr);
-
-    buffer[0] = REQUEST_CODE_GET_GAMEPAD_STATE;
-    memcpy(buffer + 1, &controller.id, 4);
-    
-    res = sendto(server_sock, buffer, BUFFER_SIZE, 0, (struct sockaddr*)&client_addr, client_addr_len);
-    if (res == SOCKET_ERROR) goto done;
-    
-    res = recvfrom(server_sock, buffer, BUFFER_SIZE, 0, (struct sockaddr*)&client_addr, &client_addr_len);
-    if (res == SOCKET_ERROR || buffer[0] != REQUEST_CODE_GET_GAMEPAD_STATE) goto done;
-    
-    memcpy(&gamepad_id, buffer + 2, 4);
+    gamepad_id = *(int*)(buffer + 2);
     if (buffer[1] != 1 || gamepad_id != controller.id) 
     {
-        EnterCriticalSection(&controller.crit);
-        controller.enabled = FALSE;
         controller.connected = FALSE;
-        LeaveCriticalSection(&controller.crit);
-        goto done;
+        return;
     }
     
-    memcpy(&buttons, buffer + 6, 2);
-    
+    buttons = *(short*)(buffer + 6);    
     dpad = buffer[8];
     
-    memcpy(&thumb_lx, buffer + 9, 2);
-    memcpy(&thumb_ly, buffer + 11, 2);
-    memcpy(&thumb_rx, buffer + 13, 2);
-    memcpy(&thumb_ry, buffer + 15, 2);    
+    thumb_lx = *(short*)(buffer + 9);
+    thumb_ly = *(short*)(buffer + 11);
+    thumb_rx = *(short*)(buffer + 13);
+    thumb_ry = *(short*)(buffer + 15);
 
+    state.Gamepad.wButtons = 0;
     for (i = 0; i < 10; i++)
     {    
         if ((buttons & (1<<i))) {
@@ -346,8 +246,8 @@ static void read_controller_state(void)
         }
     }
     
-    if ((buttons & (1<<10))) state.Gamepad.bLeftTrigger = 255;
-    if ((buttons & (1<<11))) state.Gamepad.bRightTrigger = 255;
+    state.Gamepad.bLeftTrigger = (buttons & (1<<10)) ? 255 : 0;
+    state.Gamepad.bRightTrigger = (buttons & (1<<11)) ? 255 : 0;
 
     switch (dpad)
     {
@@ -366,77 +266,100 @@ static void read_controller_state(void)
     state.Gamepad.sThumbRX = thumb_rx;
     state.Gamepad.sThumbRY = -thumb_ry;
     
-done:
-    EnterCriticalSection(&controller.crit);
     state.dwPacketNumber = controller.state.dwPacketNumber + 1;
     controller.state = state;
-    LeaveCriticalSection(&controller.crit);
 }
 
-static DWORD WINAPI controller_update_thread_proc(void *param)
+static DWORD WINAPI controller_send_thread_proc(void *param)
 {
-    DWORD last_time, curr_time;
-    const int num_events = 2;
-    HANDLE events[num_events];
-    DWORD ret = WAIT_TIMEOUT;
-
-    SetThreadDescription(GetCurrentThread(), L"wine_xinput_controller_update");
-    controller_check_connection();
+    SetThreadDescription(GetCurrentThread(), L"wine_xinput_controller_send");
+    if (server_sock == INVALID_SOCKET) create_server_socket();
+    
+    get_gamepad_request();
     SetEvent(start_event);
 
-    last_time = GetCurrentTime();
-    do
-    {
-        curr_time = GetCurrentTime();
-        if (ret == WAIT_TIMEOUT || (curr_time - last_time) >= 2000) {
-            controller_check_connection();
-            last_time = curr_time;
-        }
-        if (controller.connected && controller.enabled) 
-        {
-            read_controller_state();
-            Sleep(16);
-        }
-        
-        events[0] = update_event;
-        events[1] = stop_event;    
+    while (thread_running)
+    {   
+        get_gamepad_request();
+        Sleep(2000);
     }
-    while ((ret = MsgWaitForMultipleObjectsEx(num_events, events, 2000, QS_ALLINPUT, MWMO_ALERTABLE)) < num_events - 1 ||
-            ret == num_events || ret == WAIT_TIMEOUT);
 
-    if (ret != num_events - 1) ERR("update thread exited unexpectedly, ret %lu\n", ret);
-    SetEvent(done_event);
-    return ret;
+    return 0;
 }
 
-static BOOL WINAPI start_update_thread_once(INIT_ONCE *once, void *param, void **context)
+static DWORD WINAPI controller_read_thread_proc(void *param) {
+    int res;
+    char buffer[BUFFER_SIZE];
+    
+    SetThreadDescription(GetCurrentThread(), L"wine_xinput_controller_read");
+    if (server_sock == INVALID_SOCKET) create_server_socket();
+    
+    SetEvent(start_event);
+    
+    while (thread_running)
+    {    
+        res = recvfrom(server_sock, buffer, BUFFER_SIZE, 0, NULL, 0);
+        if (res == SOCKET_ERROR) continue;
+        
+        if (buffer[0] == REQUEST_CODE_GET_GAMEPAD) 
+        {
+            int gamepad_id;
+            gamepad_id = *(int*)(buffer + 1);
+            
+            if (gamepad_id > 0) 
+            {
+                controller.id = gamepad_id;
+                if (!controller.connected) controller_init();
+            }
+            else if (gamepad_id == 0) 
+            {
+                controller.id = 0;
+                controller.connected = FALSE;       
+            }
+        }
+        else if (buffer[0] == REQUEST_CODE_GET_GAMEPAD_STATE)
+        {
+            controller_update_state(buffer);
+        }
+    }
+    
+    return 0;
+}
+
+static BOOL WINAPI start_io_threads_once(INIT_ONCE *once, void *param, void **context)
 {
-    HANDLE thread;
+    HANDLE send_thread;
+    HANDLE read_thread;
+    
+    thread_running = TRUE;
 
     start_event = CreateEventA(NULL, FALSE, FALSE, NULL);
-    if (!start_event) ERR("failed to create start event, error %lu\n", GetLastError());
-
-    stop_event = CreateEventA(NULL, FALSE, FALSE, NULL);
-    if (!stop_event) ERR("failed to create stop event, error %lu\n", GetLastError());
-
-    done_event = CreateEventA(NULL, FALSE, FALSE, NULL);
-    if (!done_event) ERR("failed to create done event, error %lu\n", GetLastError());
-
-    update_event = CreateEventA(NULL, TRUE, FALSE, NULL);
-    if (!update_event) ERR("failed to create update event, error %lu\n", GetLastError());    
-
-    thread = CreateThread(NULL, 0, controller_update_thread_proc, NULL, 0, NULL);
-    if (!thread) ERR("failed to create update thread, error %lu\n", GetLastError());
-    CloseHandle(thread);
-
+    if (!start_event) ERR("failed to create start event, error %lu\n", GetLastError());   
+    
+    read_thread = CreateThread(NULL, 0, controller_read_thread_proc, NULL, 0, NULL);
+    if (!read_thread) ERR("failed to create read thread, error %lu\n", GetLastError());
+    CloseHandle(read_thread);
+    
     WaitForSingleObject(start_event, INFINITE);
+    CloseHandle(start_event);
+    
+    start_event = CreateEventA(NULL, FALSE, FALSE, NULL);
+    if (!start_event) ERR("failed to create start event, error %lu\n", GetLastError());    
+    
+    send_thread = CreateThread(NULL, 0, controller_send_thread_proc, NULL, 0, NULL);
+    if (!send_thread) ERR("failed to create send thread, error %lu\n", GetLastError());
+    CloseHandle(send_thread);
+    
+    WaitForSingleObject(start_event, INFINITE);
+    CloseHandle(start_event);
+    
     return TRUE;
 }
 
-static void start_update_thread(void)
+static void start_io_threads(void)
 {
     static INIT_ONCE init_once = INIT_ONCE_STATIC_INIT;
-    InitOnceExecuteOnce(&init_once, start_update_thread_once, NULL, NULL);
+    InitOnceExecuteOnce(&init_once, start_io_threads_once, NULL, NULL);
 }
 
 static BOOL controller_is_connected(DWORD index) 
@@ -456,7 +379,7 @@ BOOL WINAPI DllMain(HINSTANCE inst, DWORD reason, LPVOID reserved)
         break;
     case DLL_PROCESS_DETACH:
         if (reserved) break;
-        stop_update_thread();
+        controller_destroy();
         break;
     }
     return TRUE;
@@ -470,22 +393,17 @@ void WINAPI DECLSPEC_HOTPATCH XInputEnable(BOOL enable)
     to the controllers. Setting to true will send the last vibration
     value (sent to XInputSetState) to the controller and allow messages to
     be sent */
-    start_update_thread();
+    start_io_threads();
 
     if (!controller.connected) return;
-    EnterCriticalSection(&controller.crit);
-    
-    if (enable) controller_enable();
-    else controller_disable();
-    
-    LeaveCriticalSection(&controller.crit);
+    controller.enabled = enable;    
 }
 
 DWORD WINAPI DECLSPEC_HOTPATCH XInputSetState(DWORD index, XINPUT_VIBRATION *vibration)
 {
     TRACE("index %lu, vibration %p.\n", index, vibration);
 
-    start_update_thread();
+    start_io_threads();
 
     if (index >= XUSER_MAX_COUNT) return ERROR_BAD_ARGUMENTS;
     if (!controller_is_connected(index)) return ERROR_DEVICE_NOT_CONNECTED;
@@ -499,17 +417,14 @@ static DWORD xinput_get_state(DWORD index, XINPUT_STATE *state)
 {
     if (!state) return ERROR_BAD_ARGUMENTS;
 
-    start_update_thread();
+    start_io_threads();
 
     if (index >= XUSER_MAX_COUNT) return ERROR_BAD_ARGUMENTS;
     if (index < xinput_min_index) xinput_min_index = index;
     if (index == xinput_min_index) index = 0;
     if (!controller_is_connected(index)) return ERROR_DEVICE_NOT_CONNECTED;
-
-    EnterCriticalSection(&controller.crit);
+       
     *state = controller.state;
-    LeaveCriticalSection(&controller.crit);
-    
     return ERROR_SUCCESS;
 }
 
@@ -725,19 +640,13 @@ done:
 }
 
 DWORD WINAPI DECLSPEC_HOTPATCH XInputGetKeystroke(DWORD index, DWORD reserved, PXINPUT_KEYSTROKE keystroke)
-{
-    DWORD ret;
-    
+{    
     TRACE("index %lu, reserved %lu, keystroke %p.\n", index, reserved, keystroke);
 
     if (index >= XUSER_MAX_COUNT && index != XUSER_INDEX_ANY) return ERROR_BAD_ARGUMENTS;
     if (!controller_is_connected(index != XUSER_INDEX_ANY ? index : 0)) return ERROR_DEVICE_NOT_CONNECTED;
-
-    EnterCriticalSection(&controller.crit);
-    ret = check_for_keystroke(keystroke);
-    LeaveCriticalSection(&controller.crit);
-    
-    return ret;
+  
+    return check_for_keystroke(keystroke);
 }
 
 DWORD WINAPI DECLSPEC_HOTPATCH XInputGetCapabilities(DWORD index, DWORD flags, XINPUT_CAPABILITIES *capabilities)
@@ -771,12 +680,10 @@ DWORD WINAPI DECLSPEC_HOTPATCH XInputGetCapabilitiesEx(DWORD unk, DWORD index, D
 {
     TRACE("unk %lu, index %lu, flags %#lx, capabilities %p.\n", unk, index, flags, caps);
 
-    start_update_thread();
+    start_io_threads();
 
     if (index >= XUSER_MAX_COUNT) return ERROR_BAD_ARGUMENTS;
     if (!controller_is_connected(index)) return ERROR_DEVICE_NOT_CONNECTED;
-    
-    EnterCriticalSection(&controller.crit);
 
     if (flags & XINPUT_FLAG_GAMEPAD && controller.caps.SubType != XINPUT_DEVSUBTYPE_GAMEPAD) 
         return ERROR_DEVICE_NOT_CONNECTED;
@@ -786,8 +693,6 @@ DWORD WINAPI DECLSPEC_HOTPATCH XInputGetCapabilitiesEx(DWORD unk, DWORD index, D
         caps->VendorId = 0x045E; // Wireless Xbox 360 Controller
         caps->ProductId = 0x02A1;
     }
-
-    LeaveCriticalSection(&controller.crit);
 
     return ERROR_SUCCESS;
 }
