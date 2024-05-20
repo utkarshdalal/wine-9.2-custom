@@ -1227,6 +1227,10 @@ static void map_window( HWND hwnd, DWORD new_style )
 
         remove_startup_notification( data->display, data->whole_window );
         set_wm_hints( data );
+        
+        XChangeProperty( data->display, data->whole_window, x11drv_atom(_NET_WM_HWND),
+                         XA_CARDINAL, 32, PropModeReplace,
+                         (unsigned char *)&hwnd, 2 );
 
         if (!data->embedded)
         {
