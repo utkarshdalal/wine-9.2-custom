@@ -637,8 +637,6 @@ struct x11drv_win_data
     struct window_surface *surface;
     Pixmap         icon_pixmap;
     Pixmap         icon_mask;
-    unsigned long *icon_bits;
-    unsigned int   icon_size;
 };
 
 extern struct x11drv_win_data *get_win_data( HWND hwnd );
