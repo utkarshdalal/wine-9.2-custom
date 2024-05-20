@@ -123,7 +123,8 @@ static BOOL create_server_socket( void )
 {    
     WSADATA wsa_data;
     struct sockaddr_in server_addr;
-    DWORD timeout;
+    const DWORD timeout = 2000;
+    const UINT reuse_addr = 1;
     int res;
     
     close_server_socket();
@@ -138,8 +139,10 @@ static BOOL create_server_socket( void )
     server_sock = socket( AF_INET, SOCK_DGRAM, IPPROTO_UDP );
     if (server_sock == INVALID_SOCKET) return FALSE;
     
-    timeout = 2000;    
-    res = setsockopt( server_sock, SOL_SOCKET, SO_RCVTIMEO, (char *)&timeout, sizeof(timeout) );
+    res = setsockopt( server_sock, SOL_SOCKET, SO_REUSEADDR, (const char *)&reuse_addr, sizeof(reuse_addr) );
+    if (res == SOCKET_ERROR) return FALSE;    
+     
+    res = setsockopt( server_sock, SOL_SOCKET, SO_RCVTIMEO, (const char *)&timeout, sizeof(timeout) );
     if (res < 0) return FALSE;    
 
     res = bind( server_sock, (struct sockaddr*)&server_addr, sizeof(server_addr) );
@@ -153,7 +156,6 @@ static BOOL get_gamepad_request( BOOL notify )
     int res, gamepad_id, name_len;
     char buffer[BUFFER_SIZE];
     struct sockaddr_in client_addr;
-    DWORD size;
     char *gamepad_name;
     
     client_addr.sin_family = AF_INET;
