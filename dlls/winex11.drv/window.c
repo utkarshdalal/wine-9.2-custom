@@ -780,6 +780,9 @@ static void set_initial_wm_hints( Display *display, Window window, HWND hwnd )
     if (user_time_window)
         XChangeProperty( display, window, x11drv_atom(_NET_WM_USER_TIME_WINDOW),
                          XA_WINDOW, 32, PropModeReplace, (unsigned char *)&user_time_window, 1 );
+                         
+    XChangeProperty( display, window, x11drv_atom(_NET_WM_HWND),
+                     XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&hwnd, 2 );
 }
 
 
