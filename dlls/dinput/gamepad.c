@@ -719,6 +719,7 @@ HRESULT gamepad_create_device( struct dinput *dinput, const GUID *guid, IDirectI
     *out = NULL;
     if (!IsEqualGUID( &GUID_Joystick, guid )) return DIERR_DEVICENOTREG;
 
+    memset( &gamepad.base, 0, sizeof(gamepad.base) );
     dinput_device_init( &gamepad.base, &gamepad_vtbl, guid, dinput );
     gamepad.base.crit.DebugInfo->Spare[0] = (DWORD_PTR)(__FILE__ ": struct gamepad*->base.crit");
     gamepad.base.read_event = CreateEventW( NULL, TRUE, FALSE, NULL );
