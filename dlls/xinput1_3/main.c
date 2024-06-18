@@ -290,6 +290,7 @@ static void controller_update_state(char *buffer)
 static DWORD WINAPI controller_read_thread_proc(void *param) {
     int res;
     char buffer[BUFFER_SIZE];
+    BOOL started = FALSE;
     DWORD curr_time, last_time;
     
     SetThreadDescription(GetCurrentThread(), L"wine_xinput_controller_read");
@@ -300,7 +301,6 @@ static DWORD WINAPI controller_read_thread_proc(void *param) {
     }
     
     get_gamepad_request();
-    SetEvent(start_event);
     
     last_time = GetCurrentTime();
     while (thread_running)
@@ -337,6 +337,12 @@ static DWORD WINAPI controller_read_thread_proc(void *param) {
                 controller.connected = FALSE;       
             }
             LeaveCriticalSection(&controller.crit);
+            
+            if (!started) 
+            {
+                started = TRUE;
+                SetEvent(start_event);    
+            }
         }
         else if (buffer[0] == REQUEST_CODE_GET_GAMEPAD_STATE && controller.connected)
         {
@@ -360,7 +366,7 @@ static BOOL WINAPI start_read_thread_once(INIT_ONCE *once, void *param, void **c
     if (!thread) ERR("failed to create read thread, error %lu\n", GetLastError());
     CloseHandle(thread);
     
-    WaitForSingleObject(start_event, INFINITE);
+    WaitForSingleObject(start_event, 2000);
     CloseHandle(start_event);
     
     return TRUE;

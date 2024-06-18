@@ -77,31 +77,17 @@ struct gamepad
 {
     struct dinput_device base;
     struct gamepad_state state;
-    char* name;
-    int id;
-    char mapper_type;
-};
-
-static struct gamepad gamepad = 
-{
-    .name = NULL,
-    .id = 0,
-    .mapper_type = MAPPER_TYPE_XINPUT
 };
 
 static const struct dinput_device_vtbl gamepad_vtbl;
 static SOCKET server_sock = INVALID_SOCKET;
 static BOOL winsock_loaded = FALSE;
+static int connected_gamepad_id = 0;
+static char mapper_type = MAPPER_TYPE_XINPUT;
 
-static void init_gamepad( void ) {
-    gamepad.id = 0;
-    if (gamepad.name)
-    {
-        free( gamepad.name );
-        gamepad.name = NULL;
-    }
-    memset( &gamepad.state, 0, sizeof(gamepad.state) );
-    gamepad.mapper_type = MAPPER_TYPE_XINPUT;
+static inline struct gamepad *impl_from_IDirectInputDevice8W( IDirectInputDevice8W *iface )
+{
+    return CONTAINING_RECORD( CONTAINING_RECORD( iface, struct dinput_device, IDirectInputDevice8W_iface ), struct gamepad, base );
 }
 
 static void close_server_socket( void ) 
@@ -151,12 +137,11 @@ static BOOL create_server_socket( void )
     return TRUE;
 }
 
-static BOOL get_gamepad_request( BOOL notify ) 
+static BOOL get_gamepad_request( BOOL notify, char* gamepad_name ) 
 {
-    int res, gamepad_id, name_len;
+    int res, gamepad_id;
     char buffer[BUFFER_SIZE];
     struct sockaddr_in client_addr;
-    char *gamepad_name;
     
     client_addr.sin_family = AF_INET;
     client_addr.sin_addr.s_addr = inet_addr( "127.0.0.1" );
@@ -171,19 +156,23 @@ static BOOL get_gamepad_request( BOOL notify )
     res = recvfrom( server_sock, buffer, BUFFER_SIZE, 0, NULL, 0 );
     if (res == SOCKET_ERROR || buffer[0] != REQUEST_CODE_GET_GAMEPAD) return FALSE;
     
-    init_gamepad();
     gamepad_id = *(int*)(buffer + 1);
-    if (gamepad_id == 0) return FALSE;
+    if (gamepad_id == 0) 
+    {
+        connected_gamepad_id = 0;
+        return FALSE;
+    }
     
-    gamepad.id = gamepad_id;
-    gamepad.mapper_type = buffer[5];
+    connected_gamepad_id = gamepad_id;
+    mapper_type = buffer[5];
     
-    name_len = *(int*)(buffer + 6);
-    
-    gamepad_name = calloc( 1, name_len + 1 );
-    gamepad_name[name_len] = '\0';
-    memcpy( gamepad_name, buffer + 10, name_len );
-    gamepad.name = gamepad_name;
+    if (gamepad_name != NULL) 
+    {
+        int name_len;
+        name_len = *(int*)(buffer + 6);
+        memcpy( gamepad_name, buffer + 10, name_len );
+        gamepad_name[name_len] = '\0';
+    }
     
     return TRUE;
 }
@@ -231,53 +220,58 @@ static LONG scale_axis_value( LONG value, struct object_properties *properties )
     return phy_min + MulDiv( value - log_min, phy_max - phy_min, log_max - log_min );
 }
 
-static void handle_gamepad_input( IDirectInputDevice8W *iface, short thumb_lx, short thumb_ly, short thumb_rx, short thumb_ry, short buttons, char dpad ) 
+static void gamepad_handle_input( IDirectInputDevice8W *iface, short thumb_lx, short thumb_ly, short thumb_rx, short thumb_ry, short buttons, char dpad ) 
 {
-    int i, j;
+    int i, j, index;
     DWORD time, seq;
     BOOL notify = FALSE;
-    DIJOYSTATE *state = (DIJOYSTATE *)gamepad.base.device_state;
+    struct gamepad *impl = impl_from_IDirectInputDevice8W( iface );
+    DIJOYSTATE *state = (DIJOYSTATE *)impl->base.device_state;
     
     time = GetCurrentTime();
-    seq = gamepad.base.dinput->evsequence++;    
+    seq = impl->base.dinput->evsequence++;    
     
-    if (gamepad.mapper_type == MAPPER_TYPE_STANDARD) 
+    if (mapper_type == MAPPER_TYPE_STANDARD) 
     {
-        if (thumb_lx != gamepad.state.thumb_lx)
+        if (thumb_lx != impl->state.thumb_lx)
         {
-            gamepad.state.thumb_lx = thumb_lx;
-            state->lX = scale_axis_value(thumb_lx, &gamepad.base.object_properties[0]);
-            queue_event( iface, DIDFT_ABSAXIS | DIDFT_MAKEINSTANCE( 0 ), state->lX, time, seq );
+            impl->state.thumb_lx = thumb_lx;
+            index = dinput_device_object_index_from_id( iface, DIDFT_ABSAXIS | DIDFT_MAKEINSTANCE( 0 ) );
+            state->lX = scale_axis_value( thumb_lx, impl->base.object_properties + index );
+            queue_event( iface, index, state->lX, time, seq );
             notify = TRUE;
         }
         
-        if (thumb_ly != gamepad.state.thumb_ly) 
+        if (thumb_ly != impl->state.thumb_ly) 
         {
-            gamepad.state.thumb_ly = thumb_ly;
-            state->lY = scale_axis_value(thumb_ly, &gamepad.base.object_properties[1]);        
-            queue_event( iface, DIDFT_ABSAXIS | DIDFT_MAKEINSTANCE( 1 ), state->lY, time, seq );
+            impl->state.thumb_ly = thumb_ly;
+            index = dinput_device_object_index_from_id( iface, DIDFT_ABSAXIS | DIDFT_MAKEINSTANCE( 1 ) );
+            state->lY = scale_axis_value( thumb_ly, impl->base.object_properties + index );        
+            queue_event( iface, index, state->lY, time, seq );
             notify = TRUE;
         }
         
-        if (thumb_rx != gamepad.state.thumb_rx) 
+        if (thumb_rx != impl->state.thumb_rx) 
         {
-            gamepad.state.thumb_rx = thumb_rx;
-            state->lZ = scale_axis_value(thumb_rx, &gamepad.base.object_properties[2]);
-            queue_event( iface, DIDFT_ABSAXIS | DIDFT_MAKEINSTANCE( 2 ), state->lZ, time, seq );
+            impl->state.thumb_rx = thumb_rx;
+            index = dinput_device_object_index_from_id( iface, DIDFT_ABSAXIS | DIDFT_MAKEINSTANCE( 2 ) );
+            state->lZ = scale_axis_value( thumb_rx, impl->base.object_properties + index );
+            queue_event( iface, index, state->lZ, time, seq );
             notify = TRUE;
         }
         
-        if (thumb_ry != gamepad.state.thumb_ry) 
+        if (thumb_ry != impl->state.thumb_ry) 
         {
-            gamepad.state.thumb_ry = thumb_ry;
-            state->lRz = scale_axis_value(thumb_ry, &gamepad.base.object_properties[5]);
-            queue_event( iface, DIDFT_ABSAXIS | DIDFT_MAKEINSTANCE( 3 ), state->lRz, time, seq );
+            impl->state.thumb_ry = thumb_ry;
+            index = dinput_device_object_index_from_id( iface, DIDFT_ABSAXIS | DIDFT_MAKEINSTANCE( 3 ) );
+            state->lRz = scale_axis_value( thumb_ry, impl->base.object_properties + index );
+            queue_event( iface, index, state->lRz, time, seq );
             notify = TRUE;
         }
         
-        if (buttons != gamepad.state.buttons) 
+        if (buttons != impl->state.buttons) 
         {
-            gamepad.state.buttons = buttons;
+            impl->state.buttons = buttons;
             for (i = 0, j = 0; i < 12; i++)
             {
                 switch (i)
@@ -297,77 +291,86 @@ static void handle_gamepad_input( IDirectInputDevice8W *iface, short thumb_lx, s
                 }
                 
                 state->rgbButtons[j] = (buttons & (1<<i)) ? 0x80 : 0x00;
-                queue_event( iface, DIDFT_BUTTON | DIDFT_MAKEINSTANCE( j ), state->rgbButtons[j], time, seq );    
+                index = dinput_device_object_index_from_id( iface, DIDFT_BUTTON | DIDFT_MAKEINSTANCE( j ) );
+                queue_event( iface, index, state->rgbButtons[j], time, seq );    
             }
             notify = TRUE;        
         }
         
-        if (dpad != gamepad.state.dpad) 
+        if (dpad != impl->state.dpad) 
         {
-            gamepad.state.dpad = dpad;
+            impl->state.dpad = dpad;
+            index = dinput_device_object_index_from_id( iface, DIDFT_POV | DIDFT_MAKEINSTANCE( 0 ) );
             state->rgdwPOV[0] = dpad != -1 ? dpad * 4500 : -1;
-            queue_event( iface, DIDFT_POV | DIDFT_MAKEINSTANCE( 0 ), state->rgdwPOV[0], time, seq );
+            queue_event( iface, index, state->rgdwPOV[0], time, seq );
             notify = TRUE;
         }        
     }
-    else if (gamepad.mapper_type == MAPPER_TYPE_XINPUT) 
+    else if (mapper_type == MAPPER_TYPE_XINPUT) 
     {
-        if (thumb_lx != gamepad.state.thumb_lx) 
+        if (thumb_lx != impl->state.thumb_lx) 
         {
-            gamepad.state.thumb_lx = thumb_lx;
-            state->lX = scale_axis_value(thumb_lx, &gamepad.base.object_properties[0]);
-            queue_event( iface, DIDFT_ABSAXIS | DIDFT_MAKEINSTANCE( 0 ), state->lX, time, seq );
+            impl->state.thumb_lx = thumb_lx;
+            index = dinput_device_object_index_from_id( iface, DIDFT_ABSAXIS | DIDFT_MAKEINSTANCE( 0 ) );
+            state->lX = scale_axis_value( thumb_lx, impl->base.object_properties + index );
+            queue_event( iface, index, state->lX, time, seq );
             notify = TRUE;
         }
         
-        if (thumb_ly != gamepad.state.thumb_ly) 
+        if (thumb_ly != impl->state.thumb_ly) 
         {
-            gamepad.state.thumb_ly = thumb_ly;
-            state->lY = scale_axis_value(thumb_ly, &gamepad.base.object_properties[1]);        
-            queue_event( iface, DIDFT_ABSAXIS | DIDFT_MAKEINSTANCE( 1 ), state->lY, time, seq );
+            impl->state.thumb_ly = thumb_ly;
+            index = dinput_device_object_index_from_id( iface, DIDFT_ABSAXIS | DIDFT_MAKEINSTANCE( 1 ) );
+            state->lY = scale_axis_value( thumb_ly, impl->base.object_properties + index );        
+            queue_event( iface, index, state->lY, time, seq );
             notify = TRUE;
         }
         
-        if (thumb_rx != gamepad.state.thumb_rx) 
+        if (thumb_rx != impl->state.thumb_rx) 
         {
-            gamepad.state.thumb_rx = thumb_rx;
-            state->lRx = scale_axis_value(thumb_rx, &gamepad.base.object_properties[3]);
-            queue_event( iface, DIDFT_ABSAXIS | DIDFT_MAKEINSTANCE( 2 ), state->lRx, time, seq );
+            impl->state.thumb_rx = thumb_rx;
+            index = dinput_device_object_index_from_id( iface, DIDFT_ABSAXIS | DIDFT_MAKEINSTANCE( 3 ) );
+            state->lRx = scale_axis_value( thumb_rx, impl->base.object_properties + index );
+            queue_event( iface, index, state->lRx, time, seq );
             notify = TRUE;
         }
         
-        if (thumb_ry != gamepad.state.thumb_ry) 
+        if (thumb_ry != impl->state.thumb_ry) 
         {
-            gamepad.state.thumb_ry = thumb_ry;
-            state->lRy = scale_axis_value(thumb_ry, &gamepad.base.object_properties[4]);
-            queue_event( iface, DIDFT_ABSAXIS | DIDFT_MAKEINSTANCE( 4 ), state->lRy, time, seq );
+            impl->state.thumb_ry = thumb_ry;
+            index = dinput_device_object_index_from_id( iface, DIDFT_ABSAXIS | DIDFT_MAKEINSTANCE( 4 ) );
+            state->lRy = scale_axis_value( thumb_ry, impl->base.object_properties + index );
+            queue_event( iface, index, state->lRy, time, seq );
             notify = TRUE;
         }
         
-        if (buttons != gamepad.state.buttons) 
+        if (buttons != impl->state.buttons) 
         {
-            gamepad.state.buttons = buttons;
+            impl->state.buttons = buttons;
             for (i = 0; i < 10; i++)
             {
                 state->rgbButtons[i] = (buttons & (1<<i)) ? 0x80 : 0x00;
-                queue_event( iface, DIDFT_BUTTON | DIDFT_MAKEINSTANCE( i ), state->rgbButtons[i], time, seq );    
+                index = dinput_device_object_index_from_id( iface, DIDFT_BUTTON | DIDFT_MAKEINSTANCE( i ) );
+                queue_event( iface, index, state->rgbButtons[i], time, seq );    
             }
             
-            state->lZ = scale_value((buttons & (1<<10)) ? 32767 : ((buttons & (1<<11)) ? -32768 : 0), &gamepad.base.object_properties[2]);
-            queue_event( iface, DIDFT_ABSAXIS | DIDFT_MAKEINSTANCE( 2 ), state->lZ, time, seq );
+            index = dinput_device_object_index_from_id( iface, DIDFT_ABSAXIS | DIDFT_MAKEINSTANCE( 2 ) );
+            state->lZ = scale_value( (buttons & (1<<10)) ? 32767 : ((buttons & (1<<11)) ? -32768 : 0), impl->base.object_properties + index );
+            queue_event( iface, index, state->lZ, time, seq );
             notify = TRUE;        
         }
         
-        if (dpad != gamepad.state.dpad) 
+        if (dpad != impl->state.dpad) 
         {
-            gamepad.state.dpad = dpad;
+            impl->state.dpad = dpad;
+            index = dinput_device_object_index_from_id( iface, DIDFT_POV | DIDFT_MAKEINSTANCE( 0 ) );
             state->rgdwPOV[0] = dpad != -1 ? dpad * 4500 : -1;
-            queue_event( iface, DIDFT_POV | DIDFT_MAKEINSTANCE( 0 ), state->rgdwPOV[0], time, seq );
+            queue_event( iface, index, state->rgdwPOV[0], time, seq );
             notify = TRUE;
         }        
     }
     
-    if (notify && gamepad.base.hEvent) SetEvent( gamepad.base.hEvent );
+    if (notify && impl->base.hEvent) SetEvent( impl->base.hEvent );
 }
 
 static void release_gamepad_request( void ) 
@@ -388,10 +391,11 @@ static void release_gamepad_request( void )
 HRESULT gamepad_enum_device( DWORD type, DWORD flags, DIDEVICEINSTANCEW *instance, DWORD version )
 {   
     DWORD size;
+    char gamepad_name[64];
 
     TRACE( "type %#lx, flags %#lx, instance %p, version %#lx.\n", type, flags, instance, version );
     
-    if (!create_server_socket() || !get_gamepad_request( FALSE )) return DIERR_INPUTLOST;
+    if (!create_server_socket() || !get_gamepad_request( FALSE, gamepad_name )) return DIERR_INPUTLOST;
     
     size = instance->dwSize;
     memset( instance, 0, size );
@@ -403,8 +407,8 @@ HRESULT gamepad_enum_device( DWORD type, DWORD flags, DIDEVICEINSTANCEW *instanc
     else instance->dwDevType = DIDEVTYPE_HID | DIDEVTYPE_JOYSTICK | (DIDEVTYPEJOYSTICK_GAMEPAD << 8);
     instance->wUsagePage = HID_USAGE_PAGE_GENERIC;
     instance->wUsage = HID_USAGE_GENERIC_GAMEPAD;
-    MultiByteToWideChar( CP_ACP, 0, gamepad.name, -1, instance->tszInstanceName, MAX_PATH );
-    MultiByteToWideChar( CP_ACP, 0, gamepad.name, -1, instance->tszProductName, MAX_PATH );
+    MultiByteToWideChar( CP_ACP, 0, gamepad_name, -1, instance->tszInstanceName, MAX_PATH );
+    MultiByteToWideChar( CP_ACP, 0, gamepad_name, -1, instance->tszProductName, MAX_PATH );
     
     return DI_OK;
 }
@@ -429,8 +433,8 @@ static BOOL init_object_properties( struct dinput_device *device, UINT index, st
 
 static void gamepad_release( IDirectInputDevice8W *iface )
 {
-    init_gamepad();
-    CloseHandle( gamepad.base.read_event );
+    struct gamepad *impl = impl_from_IDirectInputDevice8W( iface );
+    CloseHandle( impl->base.read_event );
 }
 
 static HRESULT gamepad_read( IDirectInputDevice8W *iface )
@@ -449,7 +453,7 @@ static HRESULT gamepad_read( IDirectInputDevice8W *iface )
         short buttons, thumb_lx, thumb_ly, thumb_rx, thumb_ry;        
         
         gamepad_id = *(int*)(buffer + 2);
-        if (gamepad_id != gamepad.id) return DI_OK;
+        if (gamepad_id != connected_gamepad_id) return DI_OK;
     
         buttons = *(short*)(buffer + 6);
         dpad = buffer[8];
@@ -459,23 +463,24 @@ static HRESULT gamepad_read( IDirectInputDevice8W *iface )
         thumb_rx = *(short*)(buffer + 13);
         thumb_ry = *(short*)(buffer + 15);
     
-        handle_gamepad_input( iface, thumb_lx, thumb_ly, thumb_rx, thumb_ry, buttons, dpad );
+        gamepad_handle_input( iface, thumb_lx, thumb_ly, thumb_rx, thumb_ry, buttons, dpad );
     }
     return DI_OK;
 }
 
 static HRESULT gamepad_acquire( IDirectInputDevice8W *iface )
 {
-    get_gamepad_request( TRUE );
-    SetEvent( gamepad.base.read_event );
+    struct gamepad *impl = impl_from_IDirectInputDevice8W( iface );
+    get_gamepad_request( TRUE, NULL );
+    SetEvent( impl->base.read_event );
     return DI_OK;
 }
 
 static HRESULT gamepad_unacquire( IDirectInputDevice8W *iface )
 {
-    WaitForSingleObject( gamepad.base.read_event, INFINITE );
+    struct gamepad *impl = impl_from_IDirectInputDevice8W( iface );
+    WaitForSingleObject( impl->base.read_event, INFINITE );
     
-    init_gamepad();
     release_gamepad_request();
     close_server_socket();
     return DI_OK;
@@ -508,10 +513,10 @@ static void get_device_objects( int *instance_count, DIDEVICEOBJECTINSTANCEW **o
     *instance_count = 0;
     *out = NULL;
 
-    if (gamepad.mapper_type == MAPPER_TYPE_STANDARD) 
+    if (mapper_type == MAPPER_TYPE_STANDARD) 
     {
+        DIDEVICEOBJECTINSTANCEW instances[17];
         *instance_count = 17;
-        DIDEVICEOBJECTINSTANCEW instances[*instance_count];
         
         instances[index].guidType = GUID_XAxis;
         instances[index].dwOfs = DIJOFS_X;
@@ -569,10 +574,10 @@ static void get_device_objects( int *instance_count, DIDEVICEOBJECTINSTANCEW **o
         
         *out = instances;
     }
-    else if (gamepad.mapper_type == MAPPER_TYPE_XINPUT) 
+    else if (mapper_type == MAPPER_TYPE_XINPUT) 
     {
+        DIDEVICEOBJECTINSTANCEW instances[16];
         *instance_count = 16;
-        DIDEVICEOBJECTINSTANCEW instances[*instance_count];
         
         instances[index].guidType = GUID_XAxis;
         instances[index].dwOfs = DIJOFS_X;
@@ -643,7 +648,8 @@ static void get_device_objects( int *instance_count, DIDEVICEOBJECTINSTANCEW **o
 
 static HRESULT gamepad_enum_objects( IDirectInputDevice8W *iface, const DIPROPHEADER *filter,
                                      DWORD flags, enum_object_callback callback, void *context )
-{    
+{
+    struct gamepad *impl = impl_from_IDirectInputDevice8W( iface );
     int instance_count;
     DIDEVICEOBJECTINSTANCEW* instances;
     BOOL ret;
@@ -653,10 +659,11 @@ static HRESULT gamepad_enum_objects( IDirectInputDevice8W *iface, const DIPROPHE
 
     for (i = 0; i < instance_count; i++)
     {
-        instances[i].dwSize = sizeof(DIDEVICEOBJECTINSTANCEW);
-        instances[i].wReportId = 1;
+        DIDEVICEOBJECTINSTANCEW *instance = instances + i;
+        instance->dwSize = sizeof(DIDEVICEOBJECTINSTANCEW);
+        instance->wReportId = 1;
         
-        ret = try_enum_object( &gamepad.base, filter, flags, callback, i, instances + i, context );
+        ret = try_enum_object( &impl->base, filter, flags, callback, i, instance, context );
         if (ret != DIENUM_CONTINUE) return DIENUM_STOP;
     }
 
@@ -666,18 +673,20 @@ static HRESULT gamepad_enum_objects( IDirectInputDevice8W *iface, const DIPROPHE
 static HRESULT gamepad_get_property( IDirectInputDevice8W *iface, DWORD property,
                                      DIPROPHEADER *header, const DIDEVICEOBJECTINSTANCEW *instance )
 {
+    struct gamepad *impl = impl_from_IDirectInputDevice8W( iface );
+    
     switch (property)
     {
     case (DWORD_PTR)DIPROP_PRODUCTNAME:
     {
         DIPROPSTRING *value = (DIPROPSTRING *)header;
-        lstrcpynW( value->wsz, gamepad.base.instance.tszProductName, MAX_PATH );
+        lstrcpynW( value->wsz, impl->base.instance.tszProductName, MAX_PATH );
         return DI_OK;
     }
     case (DWORD_PTR)DIPROP_INSTANCENAME:
     {
         DIPROPSTRING *value = (DIPROPSTRING *)header;
-        lstrcpynW( value->wsz, gamepad.base.instance.tszInstanceName, MAX_PATH );
+        lstrcpynW( value->wsz, impl->base.instance.tszInstanceName, MAX_PATH );
         return DI_OK;
     }
     case (DWORD_PTR)DIPROP_VIDPID:
@@ -689,7 +698,7 @@ static HRESULT gamepad_get_property( IDirectInputDevice8W *iface, DWORD property
     case (DWORD_PTR)DIPROP_JOYSTICKID:
     {
         DIPROPDWORD *value = (DIPROPDWORD *)header;
-        value->dwData = gamepad.id;
+        value->dwData = connected_gamepad_id;
         return DI_OK;
     }
     case (DWORD_PTR)DIPROP_GUIDANDPATH:
@@ -711,7 +720,8 @@ HRESULT gamepad_create_device( struct dinput *dinput, const GUID *guid, IDirectI
         .dwSize = sizeof(filter),
         .dwHeaderSize = sizeof(filter),
         .dwHow = DIPH_DEVICE,
-    };    
+    };
+    struct gamepad *impl;
     HRESULT hr;
     
     TRACE( "dinput %p, guid %s, out %p.\n", dinput, debugstr_guid( guid ), out );
@@ -719,25 +729,25 @@ HRESULT gamepad_create_device( struct dinput *dinput, const GUID *guid, IDirectI
     *out = NULL;
     if (!IsEqualGUID( &GUID_Joystick, guid )) return DIERR_DEVICENOTREG;
 
-    memset( &gamepad.base, 0, sizeof(gamepad.base) );
-    dinput_device_init( &gamepad.base, &gamepad_vtbl, guid, dinput );
-    gamepad.base.crit.DebugInfo->Spare[0] = (DWORD_PTR)(__FILE__ ": struct gamepad*->base.crit");
-    gamepad.base.read_event = CreateEventW( NULL, TRUE, FALSE, NULL );
+    if (!(impl = calloc( 1, sizeof(*impl) ))) return E_OUTOFMEMORY;
+    dinput_device_init( &impl->base, &gamepad_vtbl, guid, dinput );
+    impl->base.crit.DebugInfo->Spare[0] = (DWORD_PTR)(__FILE__ ": struct gamepad*->base.crit");
+    impl->base.read_event = CreateEventW( NULL, TRUE, FALSE, NULL );
 
-    gamepad_enum_device( 0, 0, &gamepad.base.instance, dinput->dwVersion );
-    gamepad.base.caps.dwDevType = gamepad.base.instance.dwDevType;
-    gamepad.base.caps.dwFirmwareRevision = 100;
-    gamepad.base.caps.dwHardwareRevision = 100;
-    gamepad.base.dwCoopLevel = DISCL_NONEXCLUSIVE | DISCL_BACKGROUND;
+    gamepad_enum_device( 0, 0, &impl->base.instance, dinput->dwVersion );
+    impl->base.caps.dwDevType = impl->base.instance.dwDevType;
+    impl->base.caps.dwFirmwareRevision = 100;
+    impl->base.caps.dwHardwareRevision = 100;
+    impl->base.dwCoopLevel = DISCL_NONEXCLUSIVE | DISCL_BACKGROUND;
     
-    if (FAILED(hr = dinput_device_init_device_format( &gamepad.base.IDirectInputDevice8W_iface ))) goto failed;
-    gamepad_enum_objects( &gamepad.base.IDirectInputDevice8W_iface, &filter, DIDFT_ABSAXIS, init_object_properties, NULL );
+    if (FAILED(hr = dinput_device_init_device_format( &impl->base.IDirectInputDevice8W_iface ))) goto failed;
+    gamepad_enum_objects( &impl->base.IDirectInputDevice8W_iface, &filter, DIDFT_AXIS, init_object_properties, NULL );
 
-    *out = &gamepad.base.IDirectInputDevice8W_iface;
+    *out = &impl->base.IDirectInputDevice8W_iface;
     return DI_OK;
     
 failed:
-    IDirectInputDevice_Release( &gamepad.base.IDirectInputDevice8W_iface );
+    IDirectInputDevice_Release( &impl->base.IDirectInputDevice8W_iface );
     return hr;    
 }
 
