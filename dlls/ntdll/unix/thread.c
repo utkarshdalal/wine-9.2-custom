@@ -1535,14 +1535,20 @@ NTSTATUS send_debug_event( EXCEPTION_RECORD *rec, CONTEXT *context, BOOL first_c
  */
 NTSTATUS WINAPI NtRaiseException( EXCEPTION_RECORD *rec, CONTEXT *context, BOOL first_chance )
 {
+    static char force_ntcontinue = -1;
     NTSTATUS status = send_debug_event( rec, context, first_chance );
 
     if (status == DBG_CONTINUE || status == DBG_EXCEPTION_HANDLED)
         return NtContinue( context, FALSE );
 
     if (first_chance) return call_user_exception_dispatcher( rec, context );
+    
+    if (force_ntcontinue == -1)
+        force_ntcontinue = getenv("WINEFORCENTCONTINUE") && atoi(getenv("WINEFORCENTCONTINUE"));
 
-    if (rec->ExceptionFlags & EH_STACK_INVALID)
+    if (force_ntcontinue)
+        return NtContinue( context, FALSE );
+    else if (rec->ExceptionFlags & EH_STACK_INVALID)
         ERR_(seh)("Exception frame is not in stack limits => unable to dispatch exception.\n");
     else if (rec->ExceptionCode == STATUS_NONCONTINUABLE_EXCEPTION)
         ERR_(seh)("Process attempted to continue execution after noncontinuable exception.\n");
