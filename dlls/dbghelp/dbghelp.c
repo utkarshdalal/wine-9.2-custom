@@ -467,9 +467,15 @@ BOOL WINAPI SymInitializeW(HANDLE hProcess, PCWSTR UserSearchPath, BOOL fInvadeP
     struct process*     pcs;
     BOOL wow64, child_wow64;
 
-    TRACE("(%p %s %u)\n", hProcess, debugstr_w(UserSearchPath), fInvadeProcess);
+    TRACE("(%p %s %u)\n", hProcess, debugstr_w(UserSearchPath), fInvadeProcess); 
 
-    if (process_find_by_handle(hProcess))
+    if (hProcess == INVALID_HANDLE_VALUE) 
+    {
+        WARN("an invalid process handle was provided!\n");
+        
+        return TRUE;
+    }
+    else if (process_find_by_handle(hProcess))
     {
         WARN("the symbols for this process have already been initialized!\n");
 
