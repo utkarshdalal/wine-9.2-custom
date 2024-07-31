@@ -2491,7 +2491,7 @@ static BOOL WaitForParentProcess( void )
         goto done;
     }
 
-    if (MsgWaitForMultipleObjects( 1, &hprocess, FALSE, INFINITE, QS_ALLINPUT ) == WAIT_OBJECT_0)
+    if (MsgWaitForMultipleObjects( 1, &hprocess, FALSE, 1000, QS_ALLINPUT ) == WAIT_OBJECT_0)
         ret = TRUE;
     else
         WINE_ERR("Unable to wait for parent process, error %ld\n", GetLastError());
