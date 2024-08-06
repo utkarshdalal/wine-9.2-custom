@@ -415,6 +415,8 @@
 #define VK_EXT_HOST_IMAGE_COPY_EXTENSION_NAME "VK_EXT_host_image_copy"
 #define VK_KHR_MAP_MEMORY_2_SPEC_VERSION 1
 #define VK_KHR_MAP_MEMORY_2_EXTENSION_NAME "VK_KHR_map_memory2"
+#define VK_EXT_MAP_MEMORY_PLACED_SPEC_VERSION 1
+#define VK_EXT_MAP_MEMORY_PLACED_EXTENSION_NAME "VK_EXT_map_memory_placed"
 #define VK_EXT_SHADER_ATOMIC_FLOAT_2_SPEC_VERSION 1
 #define VK_EXT_SHADER_ATOMIC_FLOAT_2_EXTENSION_NAME "VK_EXT_shader_atomic_float2"
 #define VK_EXT_SURFACE_MAINTENANCE_1_SPEC_VERSION 1
@@ -603,7 +605,7 @@
 #define VK_EXT_RASTERIZATION_ORDER_ATTACHMENT_ACCESS_EXTENSION_NAME "VK_EXT_rasterization_order_attachment_access"
 #define VK_NV_OPTICAL_FLOW_SPEC_VERSION 1
 #define VK_NV_OPTICAL_FLOW_EXTENSION_NAME "VK_NV_optical_flow"
-#define VK_EXT_LEGACY_DITHERING_SPEC_VERSION 1
+#define VK_EXT_LEGACY_DITHERING_SPEC_VERSION 2
 #define VK_EXT_LEGACY_DITHERING_EXTENSION_NAME "VK_EXT_legacy_dithering"
 #define VK_EXT_PIPELINE_PROTECTED_ACCESS_SPEC_VERSION 1
 #define VK_EXT_PIPELINE_PROTECTED_ACCESS_EXTENSION_NAME "VK_EXT_pipeline_protected_access"
@@ -623,6 +625,8 @@
 #define VK_NV_EXTENDED_SPARSE_ADDRESS_SPACE_EXTENSION_NAME "VK_NV_extended_sparse_address_space"
 #define VK_EXT_MUTABLE_DESCRIPTOR_TYPE_SPEC_VERSION 1
 #define VK_EXT_MUTABLE_DESCRIPTOR_TYPE_EXTENSION_NAME "VK_EXT_mutable_descriptor_type"
+#define VK_EXT_LEGACY_VERTEX_ATTRIBUTES_SPEC_VERSION 1
+#define VK_EXT_LEGACY_VERTEX_ATTRIBUTES_EXTENSION_NAME "VK_EXT_legacy_vertex_attributes"
 #define VK_EXT_LAYER_SETTINGS_SPEC_VERSION 2
 #define VK_EXT_LAYER_SETTINGS_EXTENSION_NAME "VK_EXT_layer_settings"
 #define VK_ARM_SHADER_CORE_BUILTINS_SPEC_VERSION 2
@@ -669,6 +673,14 @@
 #define VK_KHR_MAINTENANCE_6_EXTENSION_NAME "VK_KHR_maintenance6"
 #define VK_NV_DESCRIPTOR_POOL_OVERALLOCATION_SPEC_VERSION 1
 #define VK_NV_DESCRIPTOR_POOL_OVERALLOCATION_EXTENSION_NAME "VK_NV_descriptor_pool_overallocation"
+#define VK_NV_RAW_ACCESS_CHAINS_SPEC_VERSION 1
+#define VK_NV_RAW_ACCESS_CHAINS_EXTENSION_NAME "VK_NV_raw_access_chains"
+#define VK_NV_SHADER_ATOMIC_FLOAT16_VECTOR_SPEC_VERSION 1
+#define VK_NV_SHADER_ATOMIC_FLOAT16_VECTOR_EXTENSION_NAME "VK_NV_shader_atomic_float16_vector"
+#define VK_NV_RAY_TRACING_VALIDATION_SPEC_VERSION 1
+#define VK_NV_RAY_TRACING_VALIDATION_EXTENSION_NAME "VK_NV_ray_tracing_validation"
+#define VK_MESA_IMAGE_ALIGNMENT_CONTROL_SPEC_VERSION 1
+#define VK_MESA_IMAGE_ALIGNMENT_CONTROL_EXTENSION_NAME "VK_MESA_image_alignment_control"
 #define VK_KHR_ACCELERATION_STRUCTURE_SPEC_VERSION 13
 #define VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME "VK_KHR_acceleration_structure"
 #define VK_KHR_RAY_TRACING_PIPELINE_SPEC_VERSION 1
@@ -695,7 +707,7 @@
 #define VK_API_VERSION_1_2 VK_MAKE_API_VERSION(0, 1, 2, 0)
 #define VK_API_VERSION_1_3 VK_MAKE_API_VERSION(0, 1, 3, 0)
 #define VKSC_API_VERSION_1_0 VK_MAKE_API_VERSION(VKSC_API_VARIANT, 1, 0, 0)
-#define VK_HEADER_VERSION 277
+#define VK_HEADER_VERSION 285
 #define VK_HEADER_VERSION_COMPLETE VK_MAKE_API_VERSION(0, 1, 3, VK_HEADER_VERSION)
 #define VK_DEFINE_HANDLE(object) typedef struct object##_T* object;
 #define VK_USE_64_BIT_PTR_DEFINES 0
@@ -2362,7 +2374,7 @@ typedef enum VkFormat
     VK_FORMAT_G16_B16R16_2PLANE_444_UNORM = 1000330003,
     VK_FORMAT_A4R4G4B4_UNORM_PACK16 = 1000340000,
     VK_FORMAT_A4B4G4R4_UNORM_PACK16 = 1000340001,
-    VK_FORMAT_R16G16_S10_5_NV = 1000464000,
+    VK_FORMAT_R16G16_SFIXED5_NV = 1000464000,
     VK_FORMAT_A1B5G5R5_UNORM_PACK16_KHR = 1000470000,
     VK_FORMAT_A8_UNORM_KHR = 1000470001,
     VK_FORMAT_ASTC_4x4_SFLOAT_BLOCK_EXT = VK_FORMAT_ASTC_4x4_SFLOAT_BLOCK,
@@ -2419,6 +2431,7 @@ typedef enum VkFormat
     VK_FORMAT_G16_B16R16_2PLANE_444_UNORM_EXT = VK_FORMAT_G16_B16R16_2PLANE_444_UNORM,
     VK_FORMAT_A4R4G4B4_UNORM_PACK16_EXT = VK_FORMAT_A4R4G4B4_UNORM_PACK16,
     VK_FORMAT_A4B4G4R4_UNORM_PACK16_EXT = VK_FORMAT_A4B4G4R4_UNORM_PACK16,
+    VK_FORMAT_R16G16_S10_5_NV = VK_FORMAT_R16G16_SFIXED5_NV,
     VK_FORMAT_MAX_ENUM = 0x7fffffff,
 } VkFormat;
 
@@ -2969,6 +2982,12 @@ typedef enum VkMemoryHeapFlagBits
     VK_MEMORY_HEAP_FLAG_BITS_MAX_ENUM = 0x7fffffff,
 } VkMemoryHeapFlagBits;
 
+typedef enum VkMemoryMapFlagBits
+{
+    VK_MEMORY_MAP_PLACED_BIT_EXT = 0x00000001,
+    VK_MEMORY_MAP_FLAG_BITS_MAX_ENUM = 0x7fffffff,
+} VkMemoryMapFlagBits;
+
 typedef enum VkMemoryOverallocationBehaviorAMD
 {
     VK_MEMORY_OVERALLOCATION_BEHAVIOR_DEFAULT_AMD = 0,
@@ -2989,6 +3008,12 @@ typedef enum VkMemoryPropertyFlagBits
     VK_MEMORY_PROPERTY_DEVICE_UNCACHED_BIT_AMD = 0x00000080,
     VK_MEMORY_PROPERTY_FLAG_BITS_MAX_ENUM = 0x7fffffff,
 } VkMemoryPropertyFlagBits;
+
+typedef enum VkMemoryUnmapFlagBitsKHR
+{
+    VK_MEMORY_UNMAP_RESERVE_BIT_EXT = 0x00000001,
+    VK_MEMORY_UNMAP_FLAG_BITS_KHR_MAX_ENUM = 0x7fffffff,
+} VkMemoryUnmapFlagBitsKHR;
 
 typedef enum VkMicromapCreateFlagBitsEXT
 {
@@ -3354,6 +3379,7 @@ static const VkPipelineCreateFlagBits2KHR VK_PIPELINE_CREATE_2_NO_PROTECTED_ACCE
 static const VkPipelineCreateFlagBits2KHR VK_PIPELINE_CREATE_2_RAY_TRACING_DISPLACEMENT_MICROMAP_BIT_NV = 0x10000000ull;
 static const VkPipelineCreateFlagBits2KHR VK_PIPELINE_CREATE_2_DESCRIPTOR_BUFFER_BIT_EXT = 0x20000000ull;
 static const VkPipelineCreateFlagBits2KHR VK_PIPELINE_CREATE_2_PROTECTED_ACCESS_ONLY_BIT_EXT = 0x40000000ull;
+static const VkPipelineCreateFlagBits2KHR VK_PIPELINE_CREATE_2_ENABLE_LEGACY_DITHERING_BIT_EXT = 0x400000000ull;
 
 typedef enum VkPipelineCreationFeedbackFlagBits
 {
@@ -3785,7 +3811,7 @@ typedef enum VkResult
     VK_OPERATION_DEFERRED_KHR = 1000268002,
     VK_OPERATION_NOT_DEFERRED_KHR = 1000268003,
     VK_PIPELINE_COMPILE_REQUIRED = 1000297000,
-    VK_ERROR_INCOMPATIBLE_SHADER_BINARY_EXT = 1000482000,
+    VK_INCOMPATIBLE_SHADER_BINARY_EXT = 1000482000,
     VK_ERROR_OUT_OF_POOL_MEMORY_KHR = VK_ERROR_OUT_OF_POOL_MEMORY,
     VK_ERROR_INVALID_EXTERNAL_HANDLE_KHR = VK_ERROR_INVALID_EXTERNAL_HANDLE,
     VK_ERROR_FRAGMENTATION_EXT = VK_ERROR_FRAGMENTATION,
@@ -3794,6 +3820,7 @@ typedef enum VkResult
     VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS_KHR = VK_ERROR_INVALID_OPAQUE_CAPTURE_ADDRESS,
     VK_PIPELINE_COMPILE_REQUIRED_EXT = VK_PIPELINE_COMPILE_REQUIRED,
     VK_ERROR_PIPELINE_COMPILE_REQUIRED_EXT = VK_PIPELINE_COMPILE_REQUIRED,
+    VK_ERROR_INCOMPATIBLE_SHADER_BINARY_EXT = VK_INCOMPATIBLE_SHADER_BINARY_EXT,
     VK_RESULT_MAX_ENUM = 0x7fffffff,
 } VkResult;
 
@@ -4453,6 +4480,9 @@ typedef enum VkStructureType
     VK_STRUCTURE_TYPE_HOST_IMAGE_COPY_DEVICE_PERFORMANCE_QUERY_EXT = 1000270009,
     VK_STRUCTURE_TYPE_MEMORY_MAP_INFO_KHR = 1000271000,
     VK_STRUCTURE_TYPE_MEMORY_UNMAP_INFO_KHR = 1000271001,
+    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAP_MEMORY_PLACED_FEATURES_EXT = 1000272000,
+    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAP_MEMORY_PLACED_PROPERTIES_EXT = 1000272001,
+    VK_STRUCTURE_TYPE_MEMORY_MAP_PLACED_INFO_EXT = 1000272002,
     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT_2_FEATURES_EXT = 1000273000,
     VK_STRUCTURE_TYPE_SURFACE_PRESENT_MODE_EXT = 1000274000,
     VK_STRUCTURE_TYPE_SURFACE_PRESENT_SCALING_CAPABILITIES_EXT = 1000274001,
@@ -4704,6 +4734,8 @@ typedef enum VkStructureType
     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_INVOCATION_REORDER_PROPERTIES_NV = 1000490001,
     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_SPARSE_ADDRESS_SPACE_FEATURES_NV = 1000492000,
     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTENDED_SPARSE_ADDRESS_SPACE_PROPERTIES_NV = 1000492001,
+    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LEGACY_VERTEX_ATTRIBUTES_FEATURES_EXT = 1000495000,
+    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_LEGACY_VERTEX_ATTRIBUTES_PROPERTIES_EXT = 1000495001,
     VK_STRUCTURE_TYPE_LAYER_SETTINGS_CREATE_INFO_EXT = 1000496000,
     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_CORE_BUILTINS_FEATURES_ARM = 1000497000,
     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_CORE_BUILTINS_PROPERTIES_ARM = 1000497001,
@@ -4748,6 +4780,12 @@ typedef enum VkStructureType
     VK_STRUCTURE_TYPE_SET_DESCRIPTOR_BUFFER_OFFSETS_INFO_EXT = 1000545007,
     VK_STRUCTURE_TYPE_BIND_DESCRIPTOR_BUFFER_EMBEDDED_SAMPLERS_INFO_EXT = 1000545008,
     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_POOL_OVERALLOCATION_FEATURES_NV = 1000546000,
+    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAW_ACCESS_CHAINS_FEATURES_NV = 1000555000,
+    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ATOMIC_FLOAT16_VECTOR_FEATURES_NV = 1000563000,
+    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_VALIDATION_FEATURES_NV = 1000568000,
+    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_ALIGNMENT_CONTROL_FEATURES_MESA = 1000575000,
+    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_IMAGE_ALIGNMENT_CONTROL_PROPERTIES_MESA = 1000575001,
+    VK_STRUCTURE_TYPE_IMAGE_ALIGNMENT_CONTROL_CREATE_INFO_MESA = 1000575002,
     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VARIABLE_POINTER_FEATURES = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VARIABLE_POINTERS_FEATURES,
     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETER_FEATURES = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_DRAW_PARAMETERS_FEATURES,
     VK_STRUCTURE_TYPE_DEBUG_REPORT_CREATE_INFO_EXT = VK_STRUCTURE_TYPE_DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
@@ -6707,6 +6745,13 @@ typedef struct VkHostImageCopyDevicePerformanceQueryEXT
     VkBool32 identicalMemoryLayout;
 } VkHostImageCopyDevicePerformanceQueryEXT;
 
+typedef struct VkImageAlignmentControlCreateInfoMESA
+{
+    VkStructureType sType;
+    const void *pNext;
+    uint32_t maximumRequestedAlignment;
+} VkImageAlignmentControlCreateInfoMESA;
+
 typedef struct VkImageCaptureDescriptorDataInfoEXT
 {
     VkStructureType sType;
@@ -7152,6 +7197,13 @@ typedef struct VkMemoryMapInfoKHR
     VkDeviceSize WINE_VK_ALIGN(8) offset;
     VkDeviceSize WINE_VK_ALIGN(8) size;
 } VkMemoryMapInfoKHR;
+
+typedef struct VkMemoryMapPlacedInfoEXT
+{
+    VkStructureType sType;
+    const void *pNext;
+    void *pPlacedAddress;
+} VkMemoryMapPlacedInfoEXT;
 
 typedef struct VkMemoryOpaqueCaptureAddressAllocateInfo
 {
@@ -8438,6 +8490,20 @@ typedef struct VkPhysicalDeviceImage2DViewOf3DFeaturesEXT
     VkBool32 sampler2DViewOf3D;
 } VkPhysicalDeviceImage2DViewOf3DFeaturesEXT;
 
+typedef struct VkPhysicalDeviceImageAlignmentControlFeaturesMESA
+{
+    VkStructureType sType;
+    void *pNext;
+    VkBool32 imageAlignmentControl;
+} VkPhysicalDeviceImageAlignmentControlFeaturesMESA;
+
+typedef struct VkPhysicalDeviceImageAlignmentControlPropertiesMESA
+{
+    VkStructureType sType;
+    void *pNext;
+    uint32_t supportedImageAlignmentMask;
+} VkPhysicalDeviceImageAlignmentControlPropertiesMESA;
+
 typedef struct VkPhysicalDeviceImageCompressionControlFeaturesEXT
 {
     VkStructureType sType;
@@ -8590,6 +8656,20 @@ typedef struct VkPhysicalDeviceLegacyDitheringFeaturesEXT
     void *pNext;
     VkBool32 legacyDithering;
 } VkPhysicalDeviceLegacyDitheringFeaturesEXT;
+
+typedef struct VkPhysicalDeviceLegacyVertexAttributesFeaturesEXT
+{
+    VkStructureType sType;
+    void *pNext;
+    VkBool32 legacyVertexAttributes;
+} VkPhysicalDeviceLegacyVertexAttributesFeaturesEXT;
+
+typedef struct VkPhysicalDeviceLegacyVertexAttributesPropertiesEXT
+{
+    VkStructureType sType;
+    void *pNext;
+    VkBool32 nativeUnalignedPerformance;
+} VkPhysicalDeviceLegacyVertexAttributesPropertiesEXT;
 
 typedef struct VkPhysicalDeviceLimits
 {
@@ -8788,6 +8868,22 @@ typedef struct VkPhysicalDeviceMaintenance6PropertiesKHR
     uint32_t maxCombinedImageSamplerDescriptorCount;
     VkBool32 fragmentShadingRateClampCombinerInputs;
 } VkPhysicalDeviceMaintenance6PropertiesKHR;
+
+typedef struct VkPhysicalDeviceMapMemoryPlacedFeaturesEXT
+{
+    VkStructureType sType;
+    void *pNext;
+    VkBool32 memoryMapPlaced;
+    VkBool32 memoryMapRangePlaced;
+    VkBool32 memoryUnmapReserve;
+} VkPhysicalDeviceMapMemoryPlacedFeaturesEXT;
+
+typedef struct VkPhysicalDeviceMapMemoryPlacedPropertiesEXT
+{
+    VkStructureType sType;
+    void *pNext;
+    VkDeviceSize WINE_VK_ALIGN(8) minPlacedMemoryMapAlignment;
+} VkPhysicalDeviceMapMemoryPlacedPropertiesEXT;
 
 typedef struct VkPhysicalDeviceMemoryBudgetPropertiesEXT
 {
@@ -9234,6 +9330,13 @@ typedef struct VkPhysicalDeviceRasterizationOrderAttachmentAccessFeaturesEXT
 } VkPhysicalDeviceRasterizationOrderAttachmentAccessFeaturesEXT;
 typedef VkPhysicalDeviceRasterizationOrderAttachmentAccessFeaturesEXT VkPhysicalDeviceRasterizationOrderAttachmentAccessFeaturesARM;
 
+typedef struct VkPhysicalDeviceRawAccessChainsFeaturesNV
+{
+    VkStructureType sType;
+    void *pNext;
+    VkBool32 shaderRawAccessChains;
+} VkPhysicalDeviceRawAccessChainsFeaturesNV;
+
 typedef struct VkPhysicalDeviceRayQueryFeaturesKHR
 {
     VkStructureType sType;
@@ -9316,6 +9419,13 @@ typedef struct VkPhysicalDeviceRayTracingPropertiesNV
     uint64_t WINE_VK_ALIGN(8) maxTriangleCount;
     uint32_t maxDescriptorSetAccelerationStructures;
 } VkPhysicalDeviceRayTracingPropertiesNV;
+
+typedef struct VkPhysicalDeviceRayTracingValidationFeaturesNV
+{
+    VkStructureType sType;
+    void *pNext;
+    VkBool32 rayTracingValidation;
+} VkPhysicalDeviceRayTracingValidationFeaturesNV;
 
 typedef struct VkPhysicalDeviceRelaxedLineRasterizationFeaturesIMG
 {
@@ -9420,6 +9530,13 @@ typedef struct VkPhysicalDeviceSeparateDepthStencilLayoutsFeatures
     VkBool32 separateDepthStencilLayouts;
 } VkPhysicalDeviceSeparateDepthStencilLayoutsFeatures;
 typedef VkPhysicalDeviceSeparateDepthStencilLayoutsFeatures VkPhysicalDeviceSeparateDepthStencilLayoutsFeaturesKHR;
+
+typedef struct VkPhysicalDeviceShaderAtomicFloat16VectorFeaturesNV
+{
+    VkStructureType sType;
+    void *pNext;
+    VkBool32 shaderFloat16VectorAtomics;
+} VkPhysicalDeviceShaderAtomicFloat16VectorFeaturesNV;
 
 typedef struct VkPhysicalDeviceShaderAtomicFloat2FeaturesEXT
 {
