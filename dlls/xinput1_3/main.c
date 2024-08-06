@@ -161,6 +161,8 @@ static void get_gamepad_request(void)
     buffer[0] = REQUEST_CODE_GET_GAMEPAD;
     buffer[1] = 1;
     buffer[2] = 1;
+    *(int*)(buffer + 3) = GetCurrentProcessId();
+
     sendto(server_sock, buffer, BUFFER_SIZE, 0, (struct sockaddr*)&client_addr, sizeof(client_addr));
 }
 
