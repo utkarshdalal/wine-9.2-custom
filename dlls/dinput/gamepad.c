@@ -171,6 +171,8 @@ static void get_gamepad_request( void )
     buffer[0] = REQUEST_CODE_GET_GAMEPAD;
     buffer[1] = 0;
     buffer[2] = 1;
+    *(int*)(buffer + 3) = GetCurrentProcessId();
+    
     sendto( server_sock, buffer, BUFFER_SIZE, 0, (struct sockaddr*)&client_addr, sizeof(client_addr) );
 }
 
@@ -178,15 +180,13 @@ static void release_gamepad_request( void )
 {
     char buffer[BUFFER_SIZE];
     struct sockaddr_in client_addr;
-    int client_addr_len;
     
     client_addr.sin_family = AF_INET;
     client_addr.sin_addr.s_addr = inet_addr( "127.0.0.1" );
     client_addr.sin_port = htons( CLIENT_PORT );
-    client_addr_len = sizeof(client_addr);
     
     buffer[0] = REQUEST_CODE_RELEASE_GAMEPAD;
-    sendto( server_sock, buffer, BUFFER_SIZE, 0, (struct sockaddr*)&client_addr, client_addr_len );
+    sendto( server_sock, buffer, BUFFER_SIZE, 0, (struct sockaddr*)&client_addr, sizeof(client_addr) );
 }
 
 static LONG scale_value( LONG value, struct object_properties *properties )
