@@ -223,7 +223,6 @@ static void wine_vk_physical_device_free(struct wine_phys_dev *phys_dev)
 static struct wine_phys_dev *wine_vk_physical_device_alloc(struct wine_instance *instance,
         VkPhysicalDevice phys_dev, VkPhysicalDevice handle)
 {
-    BOOL have_memory_placed = FALSE, have_map_memory2 = FALSE;
     struct wine_phys_dev *object;
     uint32_t num_host_properties, num_properties = 0;
     VkExtensionProperties *host_properties = NULL;
@@ -282,10 +281,6 @@ static struct wine_phys_dev *wine_vk_physical_device_alloc(struct wine_instance 
         }
         if (!strcmp(host_properties[i].extensionName, "VK_EXT_external_memory_host"))
             have_external_memory_host = TRUE;
-        else if (!strcmp(host_properties[i].extensionName, "VK_EXT_map_memory_placed"))
-            have_memory_placed = TRUE;
-        else if (!strcmp(host_properties[i].extensionName, "VK_KHR_map_memory2"))
-            have_map_memory2 = TRUE;        
     }
 
     TRACE("Host supported extensions %u, Wine supported extensions %u\n", num_host_properties, num_properties);
@@ -305,37 +300,6 @@ static struct wine_phys_dev *wine_vk_physical_device_alloc(struct wine_instance 
         }
     }
     object->extension_count = num_properties;
-    
-    if (have_memory_placed && have_map_memory2)
-    {
-        VkPhysicalDeviceMapMemoryPlacedFeaturesEXT map_placed_feature =
-        {
-            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAP_MEMORY_PLACED_FEATURES_EXT,
-        };
-        VkPhysicalDeviceFeatures2 features =
-        {
-            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-            .pNext = &map_placed_feature,
-        };
-
-        instance->funcs.p_vkGetPhysicalDeviceFeatures2KHR(phys_dev, &features);
-        if (map_placed_feature.memoryMapPlaced && map_placed_feature.memoryUnmapReserve)
-        {
-            VkPhysicalDeviceMapMemoryPlacedPropertiesEXT map_placed_props =
-            {
-                .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAP_MEMORY_PLACED_PROPERTIES_EXT,
-            };
-            VkPhysicalDeviceProperties2 props =
-            {
-                .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
-                .pNext = &map_placed_props,
-            };
-
-            instance->funcs.p_vkGetPhysicalDeviceProperties2(phys_dev, &props);
-            object->map_placed_align = map_placed_props.minPlacedMemoryMapAlignment;
-            TRACE( "Using placed map with alignment %u\n", object->map_placed_align );
-        }
-    }    
 
     if (use_external_memory() && have_external_memory_host)
     {
@@ -427,21 +391,10 @@ static void wine_vk_device_get_queues(struct wine_device *device,
     }
 }
 
-static BOOL contains_extension(const char *const *extensions, uint32_t count, const char *ext)
-{
-    while (count--)
-    {
-        if (!strcmp(extensions[count], ext))
-            return TRUE;
-    }
-    return FALSE;
-}
-
 static VkResult wine_vk_device_convert_create_info(struct wine_phys_dev *phys_dev,
         struct conversion_context *ctx, const VkDeviceCreateInfo *src, VkDeviceCreateInfo *dst)
 {
-    const char *extra_extensions[2], * const*extensions = src->ppEnabledExtensionNames;
-    unsigned int i, extra_count = 0, extensions_count = src->enabledExtensionCount;
+    unsigned int i;
 
     *dst = *src;
 
@@ -449,10 +402,10 @@ static VkResult wine_vk_device_convert_create_info(struct wine_phys_dev *phys_de
     dst->enabledLayerCount = 0;
     dst->ppEnabledLayerNames = NULL;
 
-    TRACE("Enabled %u extensions.\n", extensions_count);
-    for (i = 0; i < extensions_count; i++)
+    TRACE("Enabled %u extensions.\n", dst->enabledExtensionCount);
+    for (i = 0; i < dst->enabledExtensionCount; i++)
     {
-        const char *extension_name = extensions[i];
+        const char *extension_name = dst->ppEnabledExtensionNames[i];
         TRACE("Extension %u: %s.\n", i, debugstr_a(extension_name));
         if (!wine_vk_device_extension_supported(extension_name))
         {
@@ -461,38 +414,16 @@ static VkResult wine_vk_device_convert_create_info(struct wine_phys_dev *phys_de
         }
     }
 
-    if (phys_dev->map_placed_align)
-    {
-        VkPhysicalDeviceMapMemoryPlacedFeaturesEXT *map_placed_features;
-        map_placed_features = conversion_context_alloc(ctx, sizeof(*map_placed_features));
-        map_placed_features->sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MAP_MEMORY_PLACED_FEATURES_EXT;
-        map_placed_features->pNext = (void *)dst->pNext;
-        map_placed_features->memoryMapPlaced = VK_TRUE;
-        map_placed_features->memoryMapRangePlaced = VK_FALSE;
-        map_placed_features->memoryUnmapReserve = VK_TRUE;
-        dst->pNext = map_placed_features;
-
-        if (!contains_extension(extensions, extensions_count, "VK_EXT_map_memory_placed"))
-            extra_extensions[extra_count++] = "VK_EXT_map_memory_placed";
-        if (!contains_extension(extensions, extensions_count, "VK_KHR_map_memory2"))
-            extra_extensions[extra_count++] = "VK_KHR_map_memory2";
-    }
-    else if (phys_dev->external_memory_align)
-    {
-        if (!contains_extension(extensions, extensions_count, "VK_KHR_external_memory"))
-            extra_extensions[extra_count++] = "VK_KHR_external_memory";
-        if (!contains_extension(extensions, extensions_count, "VK_EXT_external_memory_host"))
-            extra_extensions[extra_count++] = "VK_EXT_external_memory_host";
-    }
-
-    if (extra_count)
+    if (phys_dev->external_memory_align)
     {
         const char **new_extensions;
 
-        dst->enabledExtensionCount += extra_count;
-        new_extensions = conversion_context_alloc(ctx, dst->enabledExtensionCount * sizeof(*new_extensions));
-        memcpy(new_extensions, extensions, extensions_count * sizeof(*new_extensions));
-        memcpy(new_extensions + extensions_count, extra_extensions, extra_count * sizeof(*new_extensions));
+        new_extensions = conversion_context_alloc(ctx, (dst->enabledExtensionCount + 2) *
+                                                  sizeof(*dst->ppEnabledExtensionNames));
+        memcpy(new_extensions, src->ppEnabledExtensionNames,
+               dst->enabledExtensionCount * sizeof(*dst->ppEnabledExtensionNames));
+        new_extensions[dst->enabledExtensionCount++] = "VK_KHR_external_memory";
+        new_extensions[dst->enabledExtensionCount++] = "VK_EXT_external_memory_host";
         dst->ppEnabledExtensionNames = new_extensions;
     }
 
@@ -1700,9 +1631,7 @@ VkResult wine_vkAllocateMemory(VkDevice handle, const VkMemoryAllocateInfo *allo
         return result;
     }
 
-    memory->size = info.allocationSize;
     memory->mapping = mapping;
-
     *ret = (VkDeviceMemory)(uintptr_t)memory;
     return VK_SUCCESS;
 }
@@ -1747,10 +1676,6 @@ VkResult wine_vkMapMemory2KHR(VkDevice handle, const VkMemoryMapInfoKHR *map_inf
     struct wine_device *device = wine_device_from_handle(handle);
     struct wine_device_memory *memory = wine_device_memory_from_handle(map_info->memory);
     VkMemoryMapInfoKHR info = *map_info;
-    VkMemoryMapPlacedInfoEXT placed_info =
-    {
-        .sType = VK_STRUCTURE_TYPE_MEMORY_MAP_PLACED_INFO_EXT,
-    };
     VkResult result;
 
     info.memory = memory->host_memory;
@@ -1761,79 +1686,15 @@ VkResult wine_vkMapMemory2KHR(VkDevice handle, const VkMemoryMapInfoKHR *map_inf
         return VK_SUCCESS;
     }
 
-    if (device->phys_dev->map_placed_align)
-    {
-        SIZE_T alloc_size = memory->size;
-        
-        placed_info.pNext = info.pNext;
-        info.pNext = &placed_info;
-        info.offset = 0;
-        info.size = VK_WHOLE_SIZE;
-        info.flags |=  VK_MEMORY_MAP_PLACED_BIT_EXT;
-
-        if (NtAllocateVirtualMemory(GetCurrentProcess(), &placed_info.pPlacedAddress, zero_bits, &alloc_size,
-                                    MEM_COMMIT, PAGE_READWRITE))
-        {
-            ERR("NtAllocateVirtualMemory failed\n");
-            return VK_ERROR_OUT_OF_HOST_MEMORY;
-        }
-    }
-
     if (device->funcs.p_vkMapMemory2KHR)
     {
         result = device->funcs.p_vkMapMemory2KHR(device->host_device, &info, data);
     }
     else
     {
-        static char use_placed_addr = -1;
         assert(!info.pNext);
-        
-        if (use_placed_addr == -1)
-            use_placed_addr = getenv("WINEVKUSEPLACEDADDR") && atoi(getenv("WINEVKUSEPLACEDADDR"));
-                
-        if (use_placed_addr)
-        {
-            SIZE_T alloc_size = memory->size;
-            void *placedAddr = NULL;
-            
-            if (NtAllocateVirtualMemory(GetCurrentProcess(), &placedAddr, zero_bits, &alloc_size,
-                                        MEM_COMMIT, PAGE_READWRITE))
-            {
-                ERR("NtAllocateVirtualMemory failed\n");
-                return VK_ERROR_OUT_OF_HOST_MEMORY;
-            }        
-            
-            result = device->funcs.p_vkMapMemory(device->host_device, info.memory, info.offset,
-                                                 info.size, info.flags, &placedAddr);
-                                                 
-            if (result != VK_SUCCESS)
-            {
-                alloc_size = 0 ;
-                ERR("vkMapMemory failed: %d\n", result);
-                NtFreeVirtualMemory(GetCurrentProcess(), &placedAddr, &alloc_size, MEM_RELEASE);
-                return result;
-            }
-            
-            memory->mapping = placedAddr;
-            *data = (char *)memory->mapping + map_info->offset;            
-        }
-        else
-            result = device->funcs.p_vkMapMemory(device->host_device, info.memory, info.offset,
-                                                 info.size, info.flags, data);            
-    }
-
-    if (placed_info.pPlacedAddress)
-    {
-        if (result != VK_SUCCESS)
-        {
-            SIZE_T alloc_size = 0;
-            ERR("vkMapMemory2EXT failed: %d\n", result);
-            NtFreeVirtualMemory(GetCurrentProcess(), &placed_info.pPlacedAddress, &alloc_size, MEM_RELEASE);
-            return result;
-        }
-        memory->mapping = placed_info.pPlacedAddress;
-        *data = (char *)memory->mapping + map_info->offset;
-        TRACE("Using placed mapping %p\n", memory->mapping);
+        result = device->funcs.p_vkMapMemory(device->host_device, info.memory, info.offset,
+                                             info.size, info.flags, data);
     }
 
 #ifdef _WIN64
@@ -1865,32 +1726,20 @@ VkResult wine_vkUnmapMemory2KHR(VkDevice handle, const VkMemoryUnmapInfoKHR *unm
     struct wine_device *device = wine_device_from_handle(handle);
     struct wine_device_memory *memory = wine_device_memory_from_handle(unmap_info->memory);
     VkMemoryUnmapInfoKHR info;
-    VkResult result;
 
-    if (memory->mapping && device->phys_dev->external_memory_align)
+    if (memory->mapping)
         return VK_SUCCESS;
 
     if (!device->funcs.p_vkUnmapMemory2KHR)
     {
-        assert(!unmap_info->pNext && !memory->mapping);
+        assert(!unmap_info->pNext);
         device->funcs.p_vkUnmapMemory(device->host_device, memory->host_memory);
         return VK_SUCCESS;
     }
 
     info = *unmap_info;
     info.memory = memory->host_memory;
-    if (memory->mapping)
-        info.flags |= VK_MEMORY_UNMAP_RESERVE_BIT_EXT;
-
-    result = device->funcs.p_vkUnmapMemory2KHR(device->host_device, &info);
-
-    if (result == VK_SUCCESS && memory->mapping)
-    {
-        SIZE_T size = 0;
-        NtFreeVirtualMemory(GetCurrentProcess(), &memory->mapping, &size, MEM_RELEASE);
-        memory->mapping = NULL;
-    }
-    return result;
+    return device->funcs.p_vkUnmapMemory2KHR(device->host_device, &info);
 }
 
 VkResult wine_vkCreateBuffer(VkDevice handle, const VkBufferCreateInfo *create_info,

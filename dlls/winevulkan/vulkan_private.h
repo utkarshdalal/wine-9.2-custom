@@ -130,7 +130,6 @@ struct wine_phys_dev
     uint32_t extension_count;
 
     uint32_t external_memory_align;
-    uint32_t map_placed_align;
 
     struct wine_vk_mapping mapping;
 };
@@ -176,7 +175,6 @@ static inline struct wine_cmd_pool *wine_cmd_pool_from_handle(VkCommandPool hand
 struct wine_device_memory
 {
     VkDeviceMemory host_memory;
-    VkDeviceSize size;
     void *mapping;
 };
 
