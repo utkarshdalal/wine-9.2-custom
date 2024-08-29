@@ -1579,7 +1579,6 @@ static NTSTATUS create_view( struct file_view **view_ret, void *base, size_t siz
     {
         TRACE( "overlapping view %p-%p for %p-%p\n",
                view->base, (char *)view->base + view->size, base, (char *)base + size );
-        assert( view->protect & VPROT_SYSTEM );
         delete_view( view );
     }
 
