@@ -35,8 +35,10 @@ INT_PTR CALLBACK security_dlgproc(HWND, UINT, WPARAM, LPARAM);
 #define NUM_PROPERTY_PAGES 8
 
 /* icons */
-#define ICO_MAIN            100
-#define ICO_INTERNET        1313
+#define ICO_MAIN             100
+#define ICO_INTERNET         1313
+#define ICO_TRUSTED_SITES    4480
+#define ICO_RESTRICTED_SITES 4481
 
 /* strings */
 #define IDS_CPL_NAME        1

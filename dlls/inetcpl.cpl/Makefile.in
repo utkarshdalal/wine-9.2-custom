@@ -10,5 +10,4 @@ SOURCES = \
 	general.c \
 	inetcpl.c \
 	inetcpl.rc \
-	inetcpl.svg \
 	security.c
