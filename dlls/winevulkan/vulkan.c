@@ -1631,7 +1631,9 @@ VkResult wine_vkAllocateMemory(VkDevice handle, const VkMemoryAllocateInfo *allo
         return result;
     }
 
+    memory->size = info.allocationSize;
     memory->mapping = mapping;
+    
     *ret = (VkDeviceMemory)(uintptr_t)memory;
     return VK_SUCCESS;
 }
@@ -1692,9 +1694,41 @@ VkResult wine_vkMapMemory2KHR(VkDevice handle, const VkMemoryMapInfoKHR *map_inf
     }
     else
     {
+        static char use_placed_addr = -1;
         assert(!info.pNext);
-        result = device->funcs.p_vkMapMemory(device->host_device, info.memory, info.offset,
-                                             info.size, info.flags, data);
+
+        if (use_placed_addr == -1)
+            use_placed_addr = getenv("WINEVKUSEPLACEDADDR") && atoi(getenv("WINEVKUSEPLACEDADDR"));
+                
+        if (use_placed_addr)
+        {
+            SIZE_T alloc_size = memory->size;
+            void *placed_addr = NULL;
+            
+            if (NtAllocateVirtualMemory(GetCurrentProcess(), &placed_addr, zero_bits, &alloc_size,
+                                        MEM_COMMIT, PAGE_READWRITE))
+            {
+                ERR("NtAllocateVirtualMemory failed\n");
+                return VK_ERROR_OUT_OF_HOST_MEMORY;
+            }        
+            
+            result = device->funcs.p_vkMapMemory(device->host_device, info.memory, info.offset,
+                                                 info.size, info.flags, &placed_addr);
+                                                 
+            if (result != VK_SUCCESS)
+            {
+                alloc_size = 0 ;
+                ERR("vkMapMemory failed: %d\n", result);
+                NtFreeVirtualMemory(GetCurrentProcess(), &placed_addr, &alloc_size, MEM_RELEASE);
+                return result;
+            }
+            
+            memory->mapping = placed_addr;
+            *data = (char *)memory->mapping + map_info->offset;            
+        }
+        else
+            result = device->funcs.p_vkMapMemory(device->host_device, info.memory, info.offset,
+                                                 info.size, info.flags, data);        
     }
 
 #ifdef _WIN64
