@@ -3239,9 +3239,9 @@ LONG WINAPI NtUserChangeDisplaySettings( UNICODE_STRING *devname, DEVMODEW *devm
 
     if (!(adapter = find_adapter( devname ))) return DISP_CHANGE_BADPARAM;
 
-    if (!adapter_get_full_mode( adapter, devmode, &full_mode )) ret = DISP_CHANGE_BADMODE;
+    if (flags & (CDS_TEST | CDS_FULLSCREEN | CDS_NORESET)) ret = DISP_CHANGE_SUCCESSFUL;
+    else if (!adapter_get_full_mode( adapter, devmode, &full_mode )) ret = DISP_CHANGE_BADMODE;
     else if ((flags & CDS_UPDATEREGISTRY) && !adapter_set_registry_settings( adapter, &full_mode )) ret = DISP_CHANGE_NOTUPDATED;
-    else if (flags & (CDS_TEST | CDS_NORESET)) ret = DISP_CHANGE_SUCCESSFUL;
     else ret = apply_display_settings( adapter->dev.device_name, &full_mode, hwnd, flags, lparam );
     adapter_release( adapter );
 
