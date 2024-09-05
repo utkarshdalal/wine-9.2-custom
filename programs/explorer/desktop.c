@@ -41,6 +41,7 @@ WINE_DEFAULT_DEBUG_CHANNEL(explorer);
 static const WCHAR default_driver[] = {'m','a','c',',','x','1','1',0};
 
 static BOOL using_root = TRUE;
+static BOOL nogui = FALSE;
 
 struct launcher
 {
@@ -725,7 +726,7 @@ static LRESULT WINAPI desktop_wnd_proc( HWND hwnd, UINT message, WPARAM wp, LPAR
         return HTCLIENT;
 
     case WM_ERASEBKGND:
-        if (!using_root) PaintDesktop( (HDC)wp );
+        if (!using_root && !nogui) PaintDesktop( (HDC)wp );
         return TRUE;
 
     case WM_SETTINGCHANGE:
@@ -738,7 +739,7 @@ static LRESULT WINAPI desktop_wnd_proc( HWND hwnd, UINT message, WPARAM wp, LPAR
         return 0;
 
     case WM_LBUTTONDBLCLK:
-        if (!using_root)
+        if (!using_root && !nogui)
         {
             const struct launcher *launcher = launcher_from_point( (short)LOWORD(lp), (short)HIWORD(lp) );
             if (launcher) ShellExecuteW( NULL, L"open", launcher->path, NULL, NULL, 0 );
@@ -749,7 +750,7 @@ static LRESULT WINAPI desktop_wnd_proc( HWND hwnd, UINT message, WPARAM wp, LPAR
         {
             PAINTSTRUCT ps;
             BeginPaint( hwnd, &ps );
-            if (!using_root)
+            if (!using_root && !nogui)
             {
                 if (ps.fErase) PaintDesktop( ps.hdc );
                 draw_launchers( ps.hdc, ps.rcPaint );
@@ -828,6 +829,9 @@ static BOOL get_default_enable_shell( const WCHAR *name )
     BOOL found = FALSE;
     BOOL result;
     DWORD size = sizeof(result);
+    
+    /* For the magic desktop name "shell" return TRUE */
+    if (!lstrcmpiW( name, L"shell" )) return TRUE;
 
     /* @@ Wine registry key: HKCU\Software\Wine\Explorer\Desktops */
     if (!RegOpenKeyW( HKEY_CURRENT_USER, L"Software\\Wine\\Explorer\\Desktops", &hkey ))
@@ -836,8 +840,9 @@ static BOOL get_default_enable_shell( const WCHAR *name )
             found = TRUE;
         RegCloseKey( hkey );
     }
-    /* Default off, except for the magic desktop name "shell" */
-    if (!found) result = (lstrcmpiW( name, L"shell" ) == 0);
+    
+    /* Default off */
+    if (!found) result = FALSE;
     return result;
 }
 
@@ -1083,8 +1088,12 @@ void manage_desktop( WCHAR *arg )
         if (!get_default_desktop_size( name, &width, &height )) width = height = 0;
     }
 
-    if (name) enable_shell = get_default_enable_shell( name );
-    show_systray = get_default_show_systray( name );
+    if (name) 
+    {
+        nogui = !wcsicmp( name, L"nogui" );
+        enable_shell = nogui || get_default_enable_shell( name );
+    }
+    show_systray = !nogui && get_default_show_systray( name );
 
     UuidCreate( &guid );
     TRACE( "display guid %s\n", debugstr_guid(&guid) );
@@ -1128,11 +1137,12 @@ void manage_desktop( WCHAR *arg )
         ClipCursor( NULL );
         initialize_display_settings( width, height );
         initialize_appbar();
-
+        
         if (using_root) enable_shell = FALSE;
-
-        initialize_systray( using_root, enable_shell, show_systray );
-        if (!using_root) initialize_launchers( hwnd );
+        
+        initialize_systray( using_root || nogui, enable_shell, show_systray );
+        
+        if (!using_root && !nogui) initialize_launchers( hwnd );
 
         if ((shell32 = LoadLibraryW( L"shell32.dll" )) &&
             (pShellDDEInit = (void *)GetProcAddress( shell32, (LPCSTR)188)))

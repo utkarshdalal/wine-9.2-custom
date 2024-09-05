@@ -57,7 +57,51 @@ extern IShellLinkW *load_shelllink(const WCHAR *path);
 extern HICON extract_icon(IShellLinkW *link, BOOL large_icon);
 
 #define MENU_ID_RUN 1
-#define MENU_ID_EXIT 2
+#define MENU_ID_WINEBOOT 2
+
+static INT_PTR CALLBACK wineboot_dlgproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
+{
+    switch (msg)
+    {
+    case WM_INITDIALOG:
+        CheckRadioButton(hwnd, IDC_RAD1, IDC_RAD3, IDC_RAD1);
+        ShowWindow(hwnd, SW_SHOWNORMAL);
+        return TRUE;
+    case WM_COMMAND:
+        switch (wparam)
+        {
+        case IDC_RAD1:
+            CheckRadioButton(hwnd, IDC_RAD1, IDC_RAD3, IDC_RAD1);
+            return TRUE;
+        case IDC_RAD2:
+            CheckRadioButton(hwnd, IDC_RAD1, IDC_RAD3, IDC_RAD2);
+            return TRUE;
+        case IDC_RAD3:
+            CheckRadioButton(hwnd, IDC_RAD1, IDC_RAD3, IDC_RAD3);
+            return TRUE;
+        case IDOK:
+            {
+                char* arg = NULL;
+                
+                if (IsDlgButtonChecked(hwnd, IDC_RAD1) == BST_CHECKED)
+                    arg = "--kill --force --shutdown";
+                else if (IsDlgButtonChecked(hwnd, IDC_RAD2) == BST_CHECKED)
+                    arg = "--end-session --force --restart";
+                else if (IsDlgButtonChecked(hwnd, IDC_RAD3) == BST_CHECKED)
+                    arg = "--update";
+                
+                ShellExecuteA(hwnd, "open", "wineboot.exe", arg, NULL, SW_HIDE);
+                EndDialog(hwnd, TRUE);
+                return TRUE;
+            }            
+        case IDCANCEL:
+            EndDialog(hwnd, FALSE);
+            return TRUE;
+        }
+        break;
+    }
+    return FALSE;
+}
 
 static ULONG copy_pidls(struct menu_item* item, LPITEMIDLIST dest)
 {
@@ -486,17 +530,6 @@ static void run_dialog(void)
     FreeLibrary(hShell32);
 }
 
-static void shut_down(HWND hwnd)
-{
-    WCHAR prompt[256];
-    int ret;
-
-    LoadStringW(NULL, IDS_EXIT_PROMPT, prompt, ARRAY_SIZE(prompt));
-    ret = MessageBoxW(hwnd, prompt, L"Wine", MB_YESNO|MB_ICONQUESTION|MB_SYSTEMMODAL);
-    if (ret == IDYES)
-        ExitWindows(0, 0);
-}
-
 LRESULT menu_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
     switch (msg)
@@ -533,8 +566,8 @@ LRESULT menu_wndproc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
                 exec_item(item);
             else if (mii.wID == MENU_ID_RUN)
                 run_dialog();
-            else if (mii.wID == MENU_ID_EXIT)
-                shut_down(hwnd);
+            else if (mii.wID == MENU_ID_WINEBOOT)
+                DialogBoxW(GetModuleHandleW(NULL), MAKEINTRESOURCEW(IDD_WINEBOOT), NULL, wineboot_dlgproc);
 
             destroy_menus();
 
@@ -607,10 +640,10 @@ void do_startmenu(HWND hwnd)
     mii.fType = MFT_SEPARATOR;
     InsertMenuItemW(root_menu.menuhandle, -1, TRUE, &mii);
 
-    LoadStringW(NULL, IDS_EXIT_LABEL, label, ARRAY_SIZE(label));
+    LoadStringW(NULL, IDS_WINEBOOT_LABEL, label, ARRAY_SIZE(label));
     mii.fMask = MIIM_STRING|MIIM_ID|MIIM_BITMAP;
     mii.dwTypeData = label;
-    mii.wID = MENU_ID_EXIT;
+    mii.wID = MENU_ID_WINEBOOT;
     
     ExtractIconExA("shell32.dll", -28, NULL, &hicon, 1);
     root_menu.hbitmap = icon_to_bitmap(hicon);
