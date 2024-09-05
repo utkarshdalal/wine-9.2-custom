@@ -115,7 +115,7 @@ static WCHAR *get_wine_inf_path(void)
 }
 
 /* update the timestamp if different from the reference time */
-static BOOL update_timestamp( const WCHAR *config_dir, unsigned long timestamp )
+static BOOL update_timestamp( const WCHAR *config_dir, unsigned long timestamp, BOOL force )
 {
     BOOL ret = FALSE;
     int fd, count;
@@ -131,7 +131,13 @@ static BOOL update_timestamp( const WCHAR *config_dir, unsigned long timestamp )
         if ((count = read( fd, buffer, sizeof(buffer) - 1 )) >= 0)
         {
             buffer[count] = 0;
-            if (!strncmp( buffer, "disable", sizeof("disable")-1 )) goto done;
+            if (!strncmp( buffer, "disable", sizeof("disable")-1 )) 
+            {
+                if (force)
+                    strcpy( buffer, "0" );
+                else
+                    goto done;
+            }
             if (timestamp == strtoul( buffer, NULL, 10 )) goto done;
         }
         lseek( fd, 0, SEEK_SET );
@@ -1595,7 +1601,7 @@ static void update_wineprefix( BOOL force )
     fstat( fd, &st );
     close( fd );
 
-    if (update_timestamp( config_dir, st.st_mtime ) || force)
+    if (update_timestamp( config_dir, st.st_mtime, force ) || force)
     {
         SYSTEM_SUPPORTED_PROCESSOR_ARCHITECTURES_INFORMATION machines[8];
         HANDLE process = 0;
@@ -1852,6 +1858,9 @@ int __cdecl main( int argc, char *argv[] )
         ProcessRunKeys( HKEY_CURRENT_USER, L"Run", FALSE, FALSE );
         ProcessStartupItems();
     }
+    
+    if (restart && force)
+        runCmd( L"C:\\windows\\wfm.exe", NULL, FALSE, FALSE );
 
     WINE_TRACE("Operation done\n");
 
