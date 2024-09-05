@@ -15,8 +15,4 @@ SOURCES = \
 	finddlg.c \
 	fontdlg.c \
 	itemdlg.c \
-	pd32_collate.svg \
-	pd32_landscape.svg \
-	pd32_nocollate.svg \
-	pd32_portrait.svg \
 	printdlg.c
