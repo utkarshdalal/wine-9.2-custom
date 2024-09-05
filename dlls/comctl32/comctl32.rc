@@ -129,20 +129,20 @@ IDT_CHECK BITMAP idt_check.bmp
 /* @makedep: idb_std_small.bmp */
 IDB_STD_SMALL BITMAP idb_std_small.bmp
 
-/* @makedep: idb_std_large.bmp */
-IDB_STD_LARGE BITMAP idb_std_large.bmp
+/* @makedep: idb_std_small.bmp */
+IDB_STD_LARGE BITMAP idb_std_small.bmp
 
 /* @makedep: idb_view_small.bmp */
 IDB_VIEW_SMALL BITMAP idb_view_small.bmp
 
-/* @makedep: idb_view_large.bmp */
-IDB_VIEW_LARGE BITMAP idb_view_large.bmp
+/* @makedep: idb_view_small.bmp */
+IDB_VIEW_LARGE BITMAP idb_view_small.bmp
 
 /* @makedep: idb_hist_small.bmp */
 IDB_HIST_SMALL BITMAP idb_hist_small.bmp
 
-/* @makedep: idb_hist_large.bmp */
-IDB_HIST_LARGE BITMAP idb_hist_large.bmp
+/* @makedep: idb_hist_small.bmp */
+IDB_HIST_LARGE BITMAP idb_hist_small.bmp
 
 /* @makedep: idb_cmdlink.bmp */
 IDB_CMDLINK BITMAP idb_cmdlink.bmp
