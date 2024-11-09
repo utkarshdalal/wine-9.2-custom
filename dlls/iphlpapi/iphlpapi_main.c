@@ -50,11 +50,14 @@ static const WCHAR *device_tcpip = L"\\DEVICE\\TCPIP_";
 
 struct adapter_info 
 {
-    char name[32];
-    char ip_address[16];
-    char netmask[16];
-    char gateway[16];
+    char *name;
+    char *ip_address;
+    char *netmask;
+    char *gateway;
 };
+
+static struct adapter_info* cached_adapters_info = NULL;
+static int cached_adapter_info_size = 0;
 
 DWORD WINAPI AllocateAndGetIpAddrTableFromStack( MIB_IPADDRTABLE **table, BOOL sort, HANDLE heap, DWORD flags );
 
@@ -235,6 +238,12 @@ static struct adapter_info* read_adapters_info_from_file( int *adapter_info_size
     struct adapter_info* adapters_info = NULL;
     *adapter_info_size = 0;
     
+    if (cached_adapters_info != NULL) 
+    {
+        *adapter_info_size = cached_adapter_info_size;
+        return cached_adapters_info;
+    }
+    
     file = fopen( ADAPTER_INFO_PATH, "r" );
     if (file != NULL) 
     {
@@ -254,19 +263,19 @@ static struct adapter_info* read_adapters_info_from_file( int *adapter_info_size
             value = strtok( line, "," );
             while (value) 
             {
-                switch (col) 
+                switch (col)
                 {
                 case 0:
-                    strcpy( adapter_info->name, value );
+                    adapter_info->name = strdup( value );
                     break;
                 case 1:
-                    strcpy( adapter_info->ip_address, value );
+                    adapter_info->ip_address = strdup( value );
                     break;
                 case 2:
-                    strcpy( adapter_info->netmask, value );
+                    adapter_info->netmask = strdup( value );
                     break;
                 case 3:
-                    strcpy( adapter_info->gateway, value );
+                    adapter_info->gateway = strdup( value );
                     break;                    
                 }
 
@@ -279,6 +288,9 @@ static struct adapter_info* read_adapters_info_from_file( int *adapter_info_size
         fclose( file );
         
         *adapter_info_size = list_size;
+        
+        cached_adapters_info = adapters_info;
+        cached_adapter_info_size = list_size;
     }
     
     return adapters_info;
@@ -710,7 +722,6 @@ DWORD WINAPI GetAdaptersInfo( IP_ADAPTER_INFO *info, ULONG *size )
             info++;
         }
         
-        free( adapters_info );
         info[-1].Next = NULL;
         return 0;
     }
@@ -1486,7 +1497,6 @@ ULONG WINAPI DECLSPEC_HOTPATCH GetAdaptersAddresses( ULONG family, ULONG flags, 
             aa++;
         }
         
-        free( adapters_info );
         aa[-1].Next = NULL;
         return 0;
     }
