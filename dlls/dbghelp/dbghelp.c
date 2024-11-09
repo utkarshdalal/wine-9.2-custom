@@ -561,6 +561,13 @@ BOOL WINAPI SymCleanup(HANDLE hProcess)
 {
     struct process**    ppcs;
     struct process*     next;
+    
+    if (hProcess == INVALID_HANDLE_VALUE)
+    {
+        WARN("an invalid process handle was provided!\n");
+        
+        return TRUE;
+    }
 
     for (ppcs = &process_first; *ppcs; ppcs = &(*ppcs)->next)
     {
