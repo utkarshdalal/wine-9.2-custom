@@ -307,7 +307,7 @@ static DWORD WINAPI controller_read_thread_proc(void *param) {
     last_time = GetCurrentTime();
     while (thread_running)
     {
-        res = recvfrom(server_sock, buffer, BUFFER_SIZE, 0, NULL, 0);
+        res = recvfrom(server_sock, buffer, BUFFER_SIZE, 0, NULL, NULL);
         if (res <= 0)
         {
             if (WSAGetLastError() != WSAEWOULDBLOCK) break;
