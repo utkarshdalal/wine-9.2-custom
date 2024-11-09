@@ -536,11 +536,27 @@ done:
     if (!got_win_ver)
     {
         static RTL_OSVERSIONINFOEXW registry_version;
+        WCHAR winver_env[10];
+        SIZE_T len;
+        
+        if (!RtlQueryEnvironmentVariable( NULL, L"WINVERSION", 10, winver_env, ARRAY_SIZE(winver_env), &len )) 
+        {
+            DWORD i;
 
-        TRACE( "getting registry version\n" );
-        if (get_nt_registry_version( &registry_version ) ||
-            get_win9x_registry_version( &registry_version ))
-            current_version = &registry_version;
+            TRACE( "getting envvar version\n" );
+            for (i = 0; i < ARRAY_SIZE(version_names); i++)
+            {
+                if (wcscmp( version_names[i].name, winver_env )) continue;
+                current_version = &VersionData[version_names[i].ver];
+                break;
+            }            
+        }
+        else {
+            TRACE( "getting registry version\n" );
+            if (get_nt_registry_version( &registry_version ) ||
+                get_win9x_registry_version( &registry_version ))
+                current_version = &registry_version;            
+        }
     }
 
 
