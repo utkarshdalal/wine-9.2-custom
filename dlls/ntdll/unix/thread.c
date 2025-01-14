@@ -1535,7 +1535,7 @@ NTSTATUS send_debug_event( EXCEPTION_RECORD *rec, CONTEXT *context, BOOL first_c
  */
 NTSTATUS WINAPI NtRaiseException( EXCEPTION_RECORD *rec, CONTEXT *context, BOOL first_chance )
 {
-    static char force_ntcontinue = -1;
+    static int force_ntcontinue = -1;
     NTSTATUS status = send_debug_event( rec, context, first_chance );
 
     if (status == DBG_CONTINUE || status == DBG_EXCEPTION_HANDLED)
