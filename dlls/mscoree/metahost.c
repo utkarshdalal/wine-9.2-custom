@@ -400,6 +400,15 @@ static HRESULT WINAPI thread_unset_fn(void)
     return S_OK;
 }
 
+static void install_wine_mono(void)
+{
+    PROCESS_INFORMATION pi;
+    STARTUPINFOW si = {0};
+    WCHAR cmd_args[] = L"control.exe appwiz.cpl install_mono";
+
+    CreateProcessW(NULL, cmd_args, NULL, NULL, FALSE, DETACHED_PROCESS, NULL, NULL, &si, &pi);
+}
+
 static HRESULT CLRRuntimeInfo_GetRuntimeHost(CLRRuntimeInfo *This, RuntimeHost **result)
 {
     HRESULT hr = S_OK;
@@ -413,7 +422,7 @@ static HRESULT CLRRuntimeInfo_GetRuntimeHost(CLRRuntimeInfo *This, RuntimeHost *
 
     if (!get_mono_path(mono_path, FALSE))
     {
-        ERR("Wine Mono is not installed\n");
+        install_wine_mono();
         return CLR_E_SHIM_RUNTIME;
     }
 
