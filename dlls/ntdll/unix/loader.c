@@ -1293,7 +1293,7 @@ NTSTATUS load_builtin( const pe_image_info_t *image_info, WCHAR *filename, USHOR
 
     if (image_info->wine_builtin)
     {
-        if (loadorder == LO_NATIVE) return STATUS_DLL_NOT_FOUND;
+        if (loadorder == LO_NATIVE) return STATUS_IMAGE_ALREADY_LOADED;
         loadorder = LO_BUILTIN_NATIVE;  /* load builtin, then fallback to the file we found */
     }
     else if (image_info->wine_fakedll)
