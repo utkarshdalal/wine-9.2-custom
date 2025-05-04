@@ -31,7 +31,7 @@ jobs:
           tar -czf wine-linux-x64.tar.gz wine-linux-x64
       
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: wine-linux-x64
           path: wine-linux-x64.tar.gz
@@ -68,7 +68,7 @@ jobs:
           tar -czf wine-macos.tar.gz wine-macos
       
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: wine-macos
           path: wine-macos.tar.gz 

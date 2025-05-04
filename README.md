@@ -90,7 +90,13 @@ support kernel threads may be supported in the future.
      ```
      Replace VERSION with your gcc version (e.g., 14.2.0_1)
 
-  4. Configure Wine with the appropriate flags:
+  4. Configure and build Wine:
+     ```
+     ./configure
+     make
+     ```
+     
+     Note: In many cases, no additional options are needed. However, if you encounter issues, you might need to specify options:
      ```
      ./configure --enable-win64 --with-mingw=aarch64-w64-mingw32
      ```

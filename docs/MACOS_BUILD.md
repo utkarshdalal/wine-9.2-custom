@@ -62,6 +62,11 @@ The LLVM MinGW toolchain needs `libgcc.a` for building Wine. We'll create a symb
 
 1. **Configure Wine**
    ```
+   ./configure
+   ```
+   
+   Note: In many cases, no additional options are needed as the configure script will auto-detect your environment. However, if you encounter issues or need specific features, you can try the following options:
+   ```
    ./configure --enable-win64 --with-mingw=aarch64-w64-mingw32
    ```
 
