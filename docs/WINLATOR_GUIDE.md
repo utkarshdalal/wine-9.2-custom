@@ -40,25 +40,62 @@ Winlator supports two main architectures:
 
 ## Building for Optimal Performance
 
-### ARM64 Native Builds
+Cross-compiling Wine requires a two-step process: first building the native tools, then using those tools to build the target architecture.
+
+### Step 1: Build Native Wine Tools
+
+```bash
+# Create a directory for the native tools
+mkdir -p wine-tools
+cp -r * wine-tools/ || true
+cd wine-tools
+
+# Configure and build native tools
+./configure --enable-win64
+make -j$(nproc)
+
+# Return to the main directory
+cd ..
+```
+
+### Step 2: Build for Your Target Architecture
+
+#### ARM64 Native Builds
 
 Native ARM64 builds generally offer better performance on ARM64 devices by avoiding the overhead of translation through Box64. However, compatibility may vary.
 
-To build Wine for ARM64:
 ```bash
-./configure --enable-win64
+./configure --host=aarch64-w64-mingw32 --with-wine-tools=$PWD/wine-tools --enable-win64 --without-oss --disable-winemenubuilder --disable-tests
 make -j$(nproc)
 ```
 
-### x86_64 Builds for Box64 Translation
+#### x86_64 Builds for Box64 Translation
 
 When running through Box64, a standard x86_64 build of Wine is translated to ARM64 instructions at runtime. This approach offers better compatibility but potentially lower performance.
 
-To build Wine for x86_64:
 ```bash
-./configure --enable-win64
+./configure --host=x86_64-w64-mingw32 --with-wine-tools=$PWD/wine-tools --enable-win64 --without-oss --disable-winemenubuilder --disable-tests
 make -j$(nproc)
 ```
+
+### Step 3: Package Your Build
+
+```bash
+mkdir -p wine-build
+cp -r * wine-build/ || true
+tar -czf wine-build.tar.gz wine-build
+```
+
+## Configuration Options Explained
+
+The build configuration includes several important flags:
+
+- `--host=aarch64-w64-mingw32` or `--host=x86_64-w64-mingw32`: Specifies the target architecture
+- `--with-wine-tools=$PWD/wine-tools`: Points to the directory with native Wine tools (required for cross-compilation)
+- `--enable-win64`: Builds 64-bit Wine (required for most modern Windows applications)
+- `--without-oss`: Disables OSS audio support which is not needed on Android
+- `--disable-winemenubuilder`: Disables the Wine menu builder which is not needed in Winlator
+- `--disable-tests`: Speeds up build time by skipping test compilation
 
 ## Troubleshooting
 
@@ -75,6 +112,11 @@ make -j$(nproc)
 3. **Application doesn't start**
    - Make sure your Wine build includes the necessary dependencies
    - Check compatibility with your specific Wine version
+
+4. **Cross-compilation errors**
+   - Ensure you've built the native tools first
+   - Verify the `--with-wine-tools` path is correct
+   - Check that you have the appropriate cross-compiler installed
 
 ### Viewing Logs
 

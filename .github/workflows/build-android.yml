@@ -21,9 +21,19 @@ jobs:
             g++-aarch64-linux-gnu \
             libx11-dev libfreetype6-dev
       
+      - name: Build native Wine tools
+        run: |
+          # First build the native tools
+          mkdir -p wine-tools
+          cp -r * wine-tools/ || true
+          cd wine-tools
+          ./configure --enable-win64
+          make -j$(nproc)
+          cd ..
+      
       - name: Configure for ARM64
         run: |
-          ./configure --host=aarch64-w64-mingw32 --enable-win64 --without-oss --disable-winemenubuilder --disable-tests
+          ./configure --host=aarch64-w64-mingw32 --with-wine-tools=$PWD/wine-tools --enable-win64 --without-oss --disable-winemenubuilder --disable-tests
       
       - name: Build
         run: make -j$(nproc)
@@ -53,9 +63,19 @@ jobs:
             g++-x86-64-linux-gnu \
             libx11-dev libfreetype6-dev
       
+      - name: Build native Wine tools
+        run: |
+          # First build the native tools
+          mkdir -p wine-tools
+          cp -r * wine-tools/ || true
+          cd wine-tools
+          ./configure --enable-win64
+          make -j$(nproc)
+          cd ..
+      
       - name: Configure for x86_64
         run: |
-          ./configure --host=x86_64-w64-mingw32 --enable-win64 --without-oss --disable-winemenubuilder --disable-tests
+          ./configure --host=x86_64-w64-mingw32 --with-wine-tools=$PWD/wine-tools --enable-win64 --without-oss --disable-winemenubuilder --disable-tests
       
       - name: Build
         run: make -j$(nproc)

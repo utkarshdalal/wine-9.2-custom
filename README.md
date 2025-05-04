@@ -132,9 +132,32 @@ support kernel threads may be supported in the future.
      - ARM64 (native performance on ARM64 devices)
      - x86_64 (runs through Box64 translation layer)
 
-  2. Configure and build for your target architecture:
+  2. Cross-compilation requires a two-step process:
+   
+     a. First, build the native Wine tools:
      ```
+     # Create a directory for the native tools
+     mkdir -p wine-tools
+     cp -r * wine-tools/ || true
+     cd wine-tools
+     
+     # Configure and build native tools
      ./configure --enable-win64
+     make -j$(nproc)
+     
+     # Return to the main directory
+     cd ..
+     ```
+     
+     b. Then build for your target architecture:
+     ```
+     # For ARM64:
+     ./configure --host=aarch64-w64-mingw32 --with-wine-tools=$PWD/wine-tools --enable-win64 --without-oss --disable-winemenubuilder --disable-tests
+     
+     # For x86_64:
+     ./configure --host=x86_64-w64-mingw32 --with-wine-tools=$PWD/wine-tools --enable-win64 --without-oss --disable-winemenubuilder --disable-tests
+     
+     # Then build:
      make
      ```
 
