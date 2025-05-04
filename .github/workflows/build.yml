@@ -1,0 +1,74 @@
+name: Build Wine
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential flex bison gcc-mingw-w64 libx11-dev libfreetype6-dev libxcursor-dev libxi-dev libxxf86vm-dev libxrandr-dev libxinerama-dev libxcomposite-dev libglu1-mesa-dev libosmesa6-dev libpcap-dev libdbus-1-dev libasound2-dev libgsm1-dev libldap2-dev libmpg123-dev libvulkan-dev libgnutls28-dev libtiff-dev libv4l-dev libcapi20-dev libfontconfig-dev
+      
+      - name: Configure
+        run: ./configure --enable-win64
+      
+      - name: Build
+        run: make -j$(nproc)
+      
+      - name: Create artifact
+        run: |
+          mkdir -p wine-linux-x64
+          cp -r * wine-linux-x64/ || true
+          tar -czf wine-linux-x64.tar.gz wine-linux-x64
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: wine-linux-x64
+          path: wine-linux-x64.tar.gz
+  
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install dependencies
+        run: |
+          brew install mingw-w64 gcc bison flex
+          curl -L -o llvm-mingw.zip https://github.com/mstorsjo/llvm-mingw/releases/download/20250430/llvm-mingw-20250430-ucrt-macos-universal.zip
+          unzip llvm-mingw.zip
+          echo "$PWD/llvm-mingw-20250430-ucrt-macos-universal/bin" >> $GITHUB_PATH
+      
+      - name: Setup libgcc.a
+        run: |
+          GCC_VERSION=$(brew info gcc | grep -o '[0-9]*\.[0-9]*\.[0-9]*_[0-9]*' | head -1)
+          GCC_DARWIN_VERSION=$(ls -d /opt/homebrew/Cellar/gcc/$GCC_VERSION/lib/gcc/current/gcc/aarch64-apple-darwin* | xargs basename)
+          mkdir -p llvm-mingw-20250430-ucrt-macos-universal/aarch64-w64-mingw32/lib
+          ln -s /opt/homebrew/Cellar/gcc/$GCC_VERSION/lib/gcc/current/gcc/$GCC_DARWIN_VERSION/$GCC_VERSION/libgcc.a llvm-mingw-20250430-ucrt-macos-universal/aarch64-w64-mingw32/lib/libgcc.a
+      
+      - name: Configure
+        run: ./configure --enable-win64 --with-mingw=aarch64-w64-mingw32
+      
+      - name: Build
+        run: make -j$(sysctl -n hw.ncpu)
+      
+      - name: Create artifact
+        run: |
+          mkdir -p wine-macos
+          cp -r * wine-macos/ || true
+          tar -czf wine-macos.tar.gz wine-macos
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: wine-macos
+          path: wine-macos.tar.gz 

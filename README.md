@@ -71,6 +71,32 @@ support kernel threads may be supported in the future.
   MacOSX10.10.sdk and mingw-w64 v8.  The MacOSX10.14.sdk and later can
   only build wine64.
 
+**Mac OS X ARM64 (Apple Silicon) info**:
+  For building Wine on Apple Silicon (ARM64) Macs, you need to:
+
+  1. Install the LLVM MinGW toolchain for cross-compilation:
+     - Download from https://github.com/mstorsjo/llvm-mingw/releases
+     - Add the toolchain bin directory to your PATH
+
+  2. Install required dependencies via Homebrew:
+     ```
+     brew install mingw-w64 gcc
+     ```
+
+  3. Create a symbolic link for libgcc.a in your MinGW toolchain:
+     ```
+     mkdir -p /path/to/llvm-mingw/aarch64-w64-mingw32/lib
+     ln -s /opt/homebrew/Cellar/gcc/VERSION/lib/gcc/current/gcc/aarch64-apple-darwin*/VERSION/libgcc.a /path/to/llvm-mingw/aarch64-w64-mingw32/lib/libgcc.a
+     ```
+     Replace VERSION with your gcc version (e.g., 14.2.0_1)
+
+  4. Configure Wine with the appropriate flags:
+     ```
+     ./configure --enable-win64 --with-mingw=aarch64-w64-mingw32
+     ```
+
+  For more detailed instructions, see [docs/MACOS_BUILD.md](docs/MACOS_BUILD.md).
+
 **Supported file systems**:
   Wine should run on most file systems. A few compatibility problems
   have also been reported using files accessed through Samba. Also,

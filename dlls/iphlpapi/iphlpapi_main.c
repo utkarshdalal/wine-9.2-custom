@@ -44,7 +44,7 @@
 WINE_DEFAULT_DEBUG_CHANNEL(iphlpapi);
 
 #define CHARS_IN_GUID 39
-#define ADAPTER_INFO_PATH "/data/data/com.winlator/files/rootfs/tmp/adapterinfo"
+#define ADAPTER_INFO_PATH "/data/data/com.utkarshdalal.PluviaGoldberg/files/rootfs/tmp/adapterinfo"
 #define ADAPTER_INFO_UUID "{f40158d8-f074-47e4-a039-cff6a16846e0}"
 
 static const WCHAR *device_tcpip = L"\\DEVICE\\TCPIP_";
