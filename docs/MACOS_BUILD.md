@@ -24,8 +24,8 @@ This document provides detailed instructions for building Wine on macOS, with sp
 
 1. **Download the LLVM MinGW toolchain**
    ```
-   curl -L -o llvm-mingw.zip https://github.com/mstorsjo/llvm-mingw/releases/download/20250430/llvm-mingw-20250430-ucrt-macos-universal.zip
-   unzip llvm-mingw.zip
+   curl -L -o llvm-mingw.tar.xz https://github.com/mstorsjo/llvm-mingw/releases/download/20250430/llvm-mingw-20250430-ucrt-macos-universal.tar.xz
+   tar -xf llvm-mingw.tar.xz
    ```
 
 2. **Add the toolchain to your PATH**

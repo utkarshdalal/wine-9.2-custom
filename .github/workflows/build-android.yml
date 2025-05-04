@@ -1,0 +1,50 @@
+name: Build Wine for Android
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-android-arm64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential flex bison gcc-mingw-w64 \
+            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
+            libx11-dev libfreetype6-dev xz-utils
+      
+      - name: Install Android NDK
+        run: |
+          mkdir -p android-ndk
+          cd android-ndk
+          wget -q https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
+          unzip -q android-ndk-r25c-linux.zip
+          echo "ANDROID_NDK_HOME=$PWD/android-ndk-r25c" >> $GITHUB_ENV
+          echo "$PWD/android-ndk-r25c/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
+          cd ..
+      
+      - name: Configure for ARM64 Android
+        run: |
+          ./configure --enable-win64
+      
+      - name: Build
+        run: make -j$(nproc)
+      
+      - name: Create artifact
+        run: |
+          mkdir -p wine-android-arm64
+          cp -r * wine-android-arm64/ || true
+          tar -czf wine-android-arm64.tar.gz wine-android-arm64
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wine-android-arm64
+          path: wine-android-arm64.tar.gz 

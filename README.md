@@ -75,7 +75,7 @@ support kernel threads may be supported in the future.
   For building Wine on Apple Silicon (ARM64) Macs, you need to:
 
   1. Install the LLVM MinGW toolchain for cross-compilation:
-     - Download from https://github.com/mstorsjo/llvm-mingw/releases
+     - Download from https://github.com/mstorsjo/llvm-mingw/releases/download/20250430/llvm-mingw-20250430-ucrt-macos-universal.tar.xz
      - Add the toolchain bin directory to your PATH
 
   2. Install required dependencies via Homebrew:
@@ -102,6 +102,28 @@ support kernel threads may be supported in the future.
      ```
 
   For more detailed instructions, see [docs/MACOS_BUILD.md](docs/MACOS_BUILD.md).
+
+**Android ARM64 info**:
+  For building Wine to run on Android ARM64 environments:
+
+  1. Install the Android NDK and required cross-compilation tools:
+     ```
+     sudo apt-get install gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+     ```
+
+  2. Download and set up the Android NDK:
+     ```
+     export ANDROID_NDK_HOME=/path/to/android-ndk
+     export PATH=$PATH:$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin
+     ```
+
+  3. Configure and build Wine:
+     ```
+     ./configure --enable-win64
+     make
+     ```
+
+  For more detailed instructions, including how to deploy and run on Android, see [docs/ANDROID_BUILD.md](docs/ANDROID_BUILD.md).
 
 **Supported file systems**:
   Wine should run on most file systems. A few compatibility problems
