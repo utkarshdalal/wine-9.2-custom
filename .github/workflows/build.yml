@@ -43,7 +43,7 @@ jobs:
       
       - name: Install dependencies
         run: |
-          brew install mingw-w64 gcc bison flex xz-utils
+          brew install mingw-w64 gcc bison flex
           curl -L -o llvm-mingw.zip https://github.com/mstorsjo/llvm-mingw/releases/download/20250430/llvm-mingw-20250430-ucrt-macos-universal.tar.xz
           tar -xf "${LLVM_MINGW_FILE}.tar.xz"
           echo "$PWD/llvm-mingw-20250430-ucrt-macos-universal/bin" >> $GITHUB_PATH

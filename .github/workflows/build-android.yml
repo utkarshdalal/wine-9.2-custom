@@ -1,4 +1,4 @@
-name: Build Wine for Android
+name: Build Wine for Winlator
 
 on:
   push:
@@ -8,7 +8,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-android-arm64:
+  build-arm64:
+    name: Build ARM64 Wine for Winlator
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
@@ -17,34 +18,56 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential flex bison gcc-mingw-w64 \
-            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu \
-            libx11-dev libfreetype6-dev xz-utils
+            g++-aarch64-linux-gnu \
+            libx11-dev libfreetype6-dev
       
-      - name: Install Android NDK
+      - name: Configure for ARM64
         run: |
-          mkdir -p android-ndk
-          cd android-ndk
-          wget -q https://dl.google.com/android/repository/android-ndk-r25c-linux.zip
-          unzip -q android-ndk-r25c-linux.zip
-          echo "ANDROID_NDK_HOME=$PWD/android-ndk-r25c" >> $GITHUB_ENV
-          echo "$PWD/android-ndk-r25c/toolchains/llvm/prebuilt/linux-x86_64/bin" >> $GITHUB_PATH
-          cd ..
-      
-      - name: Configure for ARM64 Android
-        run: |
-          ./configure --enable-win64
+          ./configure --host=aarch64-w64-mingw32 --enable-win64 --without-oss --disable-winemenubuilder --disable-tests
       
       - name: Build
         run: make -j$(nproc)
       
       - name: Create artifact
         run: |
-          mkdir -p wine-android-arm64
-          cp -r * wine-android-arm64/ || true
-          tar -czf wine-android-arm64.tar.gz wine-android-arm64
+          mkdir -p wine-arm64
+          cp -r * wine-arm64/ || true
+          tar -czf wine-arm64.tar.gz wine-arm64
       
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: wine-android-arm64
-          path: wine-android-arm64.tar.gz 
+          name: wine-arm64
+          path: wine-arm64.tar.gz
+  
+  build-x86_64:
+    name: Build x86_64 Wine for Winlator
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential flex bison gcc-mingw-w64 \
+            g++-x86-64-linux-gnu \
+            libx11-dev libfreetype6-dev
+      
+      - name: Configure for x86_64
+        run: |
+          ./configure --host=x86_64-w64-mingw32 --enable-win64 --without-oss --disable-winemenubuilder --disable-tests
+      
+      - name: Build
+        run: make -j$(nproc)
+      
+      - name: Create artifact
+        run: |
+          mkdir -p wine-x86_64
+          cp -r * wine-x86_64/ || true
+          tar -czf wine-x86_64.tar.gz wine-x86_64
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wine-x86_64
+          path: wine-x86_64.tar.gz 

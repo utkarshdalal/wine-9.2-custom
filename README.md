@@ -125,6 +125,28 @@ support kernel threads may be supported in the future.
 
   For more detailed instructions, including how to deploy and run on Android, see [docs/ANDROID_BUILD.md](docs/ANDROID_BUILD.md).
 
+**Winlator Info**:
+  For using Wine builds with Winlator (an Android application for running Windows software):
+
+  1. You can build Wine for two different architectures:
+     - ARM64 (native performance on ARM64 devices)
+     - x86_64 (runs through Box64 translation layer)
+
+  2. Configure and build for your target architecture:
+     ```
+     ./configure --enable-win64
+     make
+     ```
+
+  3. Package the build:
+     ```
+     mkdir -p wine-build
+     cp -r * wine-build/ || true
+     tar -czf wine-build.tar.gz wine-build
+     ```
+
+  For detailed instructions on using custom Wine builds with Winlator, see [docs/WINLATOR_GUIDE.md](docs/WINLATOR_GUIDE.md).
+
 **Supported file systems**:
   Wine should run on most file systems. A few compatibility problems
   have also been reported using files accessed through Samba. Also,
