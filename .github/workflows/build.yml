@@ -103,7 +103,7 @@ jobs:
                     --without-udev --without-capi --without-xshm --without-xxf86vm
 
                 echo 'Building wine...'
-                make CROSSCFLAGS="-std=gnu89" -j$(nproc)
+                make EXTRACFLAGS="-std=gnu89" -j$(nproc)
 
                 echo 'Installing wine...'
                 make install DESTDIR=/stage
