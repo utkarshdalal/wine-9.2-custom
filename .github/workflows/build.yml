@@ -1,103 +1,123 @@
-name: Build Wine
+name: Build Wine for x86_64 imagefs.txz
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, custom-wine-9.16 ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, custom-wine-9.16 ]
   workflow_dispatch:
 
 jobs:
-  build-linux:
+  build:
+    env:
+      PREFIX: /mnt/arch/prefix
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential flex bison gcc-mingw-w64 libx11-dev libfreetype6-dev libxcursor-dev libxi-dev libxxf86vm-dev libxrandr-dev libxinerama-dev libxcomposite-dev libglu1-mesa-dev libosmesa6-dev libpcap-dev libdbus-1-dev libasound2-dev libgsm1-dev libldap2-dev libmpg123-dev libvulkan-dev libgnutls28-dev libtiff-dev libv4l-dev libcapi20-dev libfontconfig-dev
-      
-      - name: Configure
-        run: ./configure --enable-win64
-      
-      - name: Build
-        run: make -j$(nproc)
-      
-      - name: Create artifact
-        run: |
-          mkdir -p wine-linux-x64
-          cp -r * wine-linux-x64/ || true
-          tar -czf wine-linux-x64.tar.gz wine-linux-x64
-      
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+
+      - name: Cache Arch bootstrap tarball
+        id: cache-arch-bootstrap
+        uses: actions/cache@v3
         with:
-          name: wine-linux-x64
-          path: wine-linux-x64.tar.gz
-  
-  build-macos:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v3
-      
-      - name: Install dependencies
+          path: archlinux-bootstrap-x86_64.tar.zst
+          key: ${{ runner.os }}-arch-bootstrap-latest
+          restore-keys: |
+            ${{ runner.os }}-arch-bootstrap-
+
+      - name: "Install ArchLinux"
         run: |
-          brew install mingw-w64 gcc bison flex
-          curl -L -o llvm-mingw.zip https://github.com/mstorsjo/llvm-mingw/releases/download/20250430/llvm-mingw-20250430-ucrt-macos-universal.tar.xz
-          tar -xf "${LLVM_MINGW_FILE}.tar.xz"
-          echo "$PWD/llvm-mingw-20250430-ucrt-macos-universal/bin" >> $GITHUB_PATH
-      
-      - name: Setup libgcc.a
-        run: |
-          LLVM_MINGW_VERSION="20250430"
-          LLVM_MINGW_DIR="$PWD/llvm-mingw-${LLVM_MINGW_VERSION}-ucrt-macos-universal"
-          
-          GCC_VERSION=$(brew info gcc | grep -o '[0-9]*\.[0-9]*\.[0-9]*_[0-9]*' | head -1)
-          echo "GCC Version: ${GCC_VERSION}"
-          
-          GCC_PATH="/opt/homebrew/Cellar/gcc/${GCC_VERSION}"
-          if [ ! -d "${GCC_PATH}" ]; then
-            echo "GCC installation not found at expected path: ${GCC_PATH}"
-            echo "Available GCC installations:"
-            ls -la /opt/homebrew/Cellar/gcc/
-            exit 1
+          sudo apt update
+          sudo apt install -y arch-install-scripts wget
+          sudo mkdir -p /mnt/
+          if [ ! -f archlinux-bootstrap-x86_64.tar.zst ]; then
+            wget https://geo.mirror.pkgbuild.com/iso/latest/archlinux-bootstrap-x86_64.tar.zst
+          else
+            echo "→ using cached bootstrap"
           fi
-          
-          GCC_DARWIN_VERSION=$(ls -d ${GCC_PATH}/lib/gcc/current/gcc/aarch64-apple-darwin* | xargs basename)
-          echo "GCC Darwin Version: ${GCC_DARWIN_VERSION}"
-          
-          LIBGCC_PATH="${GCC_PATH}/lib/gcc/current/gcc/${GCC_DARWIN_VERSION}/${GCC_VERSION}/libgcc.a"
-          if [ ! -f "${LIBGCC_PATH}" ]; then
-            echo "libgcc.a not found at expected path: ${LIBGCC_PATH}"
-            echo "Contents of ${GCC_PATH}/lib/gcc/current/gcc/${GCC_DARWIN_VERSION}/${GCC_VERSION}:"
-            ls -la ${GCC_PATH}/lib/gcc/current/gcc/${GCC_DARWIN_VERSION}/${GCC_VERSION}/
-            exit 1
-          fi
-          
-          TARGET_DIR="${LLVM_MINGW_DIR}/aarch64-w64-mingw32/lib"
-          mkdir -p "${TARGET_DIR}"
-          
-          echo "Creating symbolic link from ${LIBGCC_PATH} to ${TARGET_DIR}/libgcc.a"
-          ln -s "${LIBGCC_PATH}" "${TARGET_DIR}/libgcc.a"
-          
-          echo "Verifying symbolic link:"
-          ls -la "${TARGET_DIR}/libgcc.a"
-      
-      - name: Configure
-        run: ./configure
-      
-      - name: Build
-        run: make -j$(sysctl -n hw.ncpu)
-      
-      - name: Create artifact
-        run: |
-          mkdir -p wine-macos
-          cp -r * wine-macos/ || true
-          tar -czf wine-macos.tar.gz wine-macos
-      
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+          sudo tar -xf archlinux-bootstrap-x86_64.tar.zst
+          sudo mv root.x86_64 /mnt/arch
+
+          sudo arch-chroot /mnt/arch bash -c "
+            sed -i '/^\[multilib\]/,+1 s/^#//' /etc/pacman.conf && \
+            sed -i 's|^#Server|Server|' /etc/pacman.d/mirrorlist && \
+            pacman -Sy
+          "
+          sudo arch-chroot /mnt/arch bash -c "pacman-key --init && pacman-key --populate && sed -i 's/#Server/Server/g' /etc/pacman.d/mirrorlist && sed -i 's/CheckSpace/#CheckSpace/g' /etc/pacman.conf && pacman -Syu --noconfirm \
+            base base-devel git mesa pulseaudio gstreamer \
+            gst-plugins-base gnutls xmlto fop libxslt libx11 \
+            libxi libxext libxinerama libxrandr libxrender \
+            libxfixes libxcursor xorgproto"
+        #   sudo arch-chroot /mnt/arch pacman -S --noconfirm \
+        #     base-devel git clang gcc-multilib pkgconf autoconf automake \
+        #     xorgproto libx11 libxext libxi libxrandr mesa \
+        #     pulseaudio gstreamer gst-plugins-base gnutls \
+        #     lib32-glibc lib32-libx11 lib32-libxext lib32-libxi lib32-libxrandr \
+        #     lib32-mesa lib32-libpulse lib32-gnutls lib32-gstreamer lib32-gst-plugins-base-libs
+
+
+      - name: Save Arch bootstrap tarball to cache
+        if: steps.cache-arch-bootstrap.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v3
         with:
-          name: wine-macos
-          path: wine-macos.tar.gz 
+          path: archlinux-bootstrap-x86_64.tar.zst
+          key: ${{ runner.os }}-arch-bootstrap-latest
+
+      - name: "Checkout Repository"
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: "Copy Repository to Chroot"
+        run: |
+          sudo cp -rf $PWD /mnt/arch/wine-custom
+
+      - name: "Unpack imagefs"
+        run: |
+          curl -L https://github.com/utkarshdalal/wine-custom/releases/download/imagefs/imagefs.txz -o imagefs.txz
+          mkdir -p imagefs
+          tar -xf imagefs.txz -C imagefs
+
+      - name: "Build Wine for x86_64"
+        run: |
+            sudo arch-chroot /mnt/arch bash << 'EOF'
+                #!/bin/bash
+                set -e  # Exit on any error
+                set -x  # Print commands as they're executed
+                
+                pacman -Sy --noconfirm autoconf automake pkgconf clang gcc-multilib mingw-w64-gcc mingw-w64-crt mingw-w64-binutils mingw-w64-headers
+                cd /wine-custom
+
+                sed -i 's/BOOL[[:space:]]*bool;/BOOL bval;/' programs/winhlp32/macro.h
+                
+                # Build wine for glibc x86_64
+                echo 'Configuring ARM64 build...'
+                ./configure CFLAGS=-std=gnu89 --enable-archs=i386,x86_64 \
+                    --prefix=/opt/wine \
+                    --with-x --with-opengl --with-pulse --with-gstreamer --with-gnutls \
+                    --with-xinput --with-xinput2 \
+                    --disable-winemenubuilder --disable-tests \
+                    --without-oss --without-usb --without-sdl --without-cups --without-netapi \
+                    --without-pcap --without-gphoto --without-v4l2 --without-pcsclite \
+                    --without-wayland --without-opencl --without-dbus --without-sane \
+                    --without-udev --without-capi --without-xshm --without-xxf86vm
+
+                echo 'Building wine...'
+                make -j$(nproc)
+
+                echo 'Installing wine...'
+                make install DESTDIR=/stage
+                tar -C /stage -caf /wine-opt.txz opt/wine
+            EOF
+            sudo mv /mnt/arch/wine-opt.txz .
+
+      - name: merge new wine into imagefs
+        run: |
+            rm -rf imagefs/opt/wine
+            tar -xf wine-opt.txz -C imagefs          # overwrites workroot/opt/wine
+            # replace old hardcoded winlator paths
+            grep -rIl --exclude='*.so' '/data/data/com.winlator/files/imagefs' imagefs | xargs sed -i 's|/data/data/com.winlator/files/imagefs|/data/data/com.utkarshdalal.PluviaGoldberg/files/imagefs|g'
+            tar -C imagefs -caf imagefs-new.txz .
+      
+      - uses: actions/upload-artifact@v4
+        with:
+          name: imagefs-new
+          path: imagefs-new.txz
