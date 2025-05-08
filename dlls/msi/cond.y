@@ -123,7 +123,7 @@ static void value_free( struct value val )
     struct value value;
     LPWSTR identifier;
     INT operator;
-    BOOL bool;
+    BOOL bval;
 }
 
 %token COND_SPACE

@@ -1829,7 +1829,7 @@ static void test_Session(IDispatch *pSession)
     WCHAR stringw[MAX_PATH];
     CHAR string[MAX_PATH];
     UINT len;
-    VARIANT_BOOL bool;
+    VARIANT_BOOL bval;
     int myint;
     IDispatch *pDatabase = NULL, *pInst = NULL, *record = NULL;
     ULONG refs_before, refs_after;
@@ -1888,20 +1888,20 @@ static void test_Session(IDispatch *pSession)
     /* Not sure how to check the language is correct */
 
     /* Session::Mode, get */
-    hr = Session_ModeGet(pSession, MSIRUNMODE_REBOOTATEND, &bool);
+    hr = Session_ModeGet(pSession, MSIRUNMODE_REBOOTATEND, &bval);
     ok(hr == S_OK, "Session_ModeGet failed, hresult %#lx\n", hr);
-    ok(!bool, "Reboot at end session mode is %d\n", bool);
+    ok(!bval, "Reboot at end session mode is %d\n", bval);
 
-    hr = Session_ModeGet(pSession, MSIRUNMODE_MAINTENANCE, &bool);
+    hr = Session_ModeGet(pSession, MSIRUNMODE_MAINTENANCE, &bval);
     ok(hr == S_OK, "Session_ModeGet failed, hresult %#lx\n", hr);
-    ok(!bool, "Maintenance mode is %d\n", bool);
+    ok(!bval, "Maintenance mode is %d\n", bval);
 
     /* Session::Mode, put */
     hr = Session_ModePut(pSession, MSIRUNMODE_REBOOTATEND, VARIANT_TRUE);
     ok(hr == S_OK, "Session_ModePut failed, hresult %#lx\n", hr);
-    hr = Session_ModeGet(pSession, MSIRUNMODE_REBOOTATEND, &bool);
+    hr = Session_ModeGet(pSession, MSIRUNMODE_REBOOTATEND, &bval);
     ok(hr == S_OK, "Session_ModeGet failed, hresult %#lx\n", hr);
-    ok(bool, "Reboot at end session mode is %d, expected 1\n", bool);
+    ok(bval, "Reboot at end session mode is %d, expected 1\n", bval);
     hr = Session_ModePut(pSession, MSIRUNMODE_REBOOTATEND, VARIANT_FALSE);  /* set it again so we don't reboot */
     ok(hr == S_OK, "Session_ModePut failed, hresult %#lx\n", hr);
 
@@ -1909,9 +1909,9 @@ static void test_Session(IDispatch *pSession)
     ok(hr == S_OK, "Session_ModePut failed, hresult %#lx\n", hr);
     ok_exception(hr, L"Mode,Flag");
 
-    hr = Session_ModeGet(pSession, MSIRUNMODE_REBOOTNOW, &bool);
+    hr = Session_ModeGet(pSession, MSIRUNMODE_REBOOTNOW, &bval);
     ok(hr == S_OK, "Session_ModeGet failed, hresult %#lx\n", hr);
-    ok(bool, "Reboot now mode is %d, expected 1\n", bool);
+    ok(bval, "Reboot now mode is %d, expected 1\n", bval);
 
     hr = Session_ModePut(pSession, MSIRUNMODE_REBOOTNOW, VARIANT_FALSE);  /* set it again so we don't reboot */
     ok(hr == S_OK, "Session_ModePut failed, hresult %#lx\n", hr);

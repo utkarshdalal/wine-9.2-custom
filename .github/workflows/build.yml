@@ -85,10 +85,6 @@ jobs:
                 
                 pacman -Sy --noconfirm autoconf automake pkgconf clang gcc-multilib mingw-w64-gcc mingw-w64-crt mingw-w64-binutils mingw-w64-headers
                 cd /wine-custom
-
-                sed -i 's/BOOL[[:space:]]*bool;/BOOL bval;/' programs/winhlp32/macro.h
-                # sed -i 's/\<bool\>/bval/g'          dlls/jscript/bool.c
-                sed -i 's/BOOL[[:space:]]*bool;/BOOL bval;/' dlls/msi/cond.y      # same struct
                 
                 # Build wine for glibc x86_64
                 echo 'Configuring ARM64 build...'

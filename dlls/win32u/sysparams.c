@@ -400,7 +400,7 @@ union sysparam_all_entry
 {
     struct sysparam_entry        hdr;
     struct sysparam_uint_entry   uint;
-    struct sysparam_bool_entry   bool;
+    struct sysparam_bool_entry   bval;
     struct sysparam_dword_entry  dword;
     struct sysparam_rgb_entry    rgb;
     struct sysparam_binary_entry bin;
@@ -3889,9 +3889,9 @@ static BOOL get_bool_entry( union sysparam_all_entry *entry, UINT int_param, voi
     if (!entry->hdr.loaded)
     {
         WCHAR buf[32];
-        if (load_entry( &entry->hdr, buf, sizeof(buf) )) entry->bool.val = wcstol( buf, NULL, 10 ) != 0;
+        if (load_entry( &entry->hdr, buf, sizeof(buf) )) entry->bval.val = wcstol( buf, NULL, 10 ) != 0;
     }
-    *(UINT *)ptr_param = entry->bool.val;
+    *(UINT *)ptr_param = entry->bval.val;
     return TRUE;
 }
 
@@ -3901,7 +3901,7 @@ static BOOL set_bool_entry( union sysparam_all_entry *entry, UINT int_param, voi
     WCHAR buf[] = { int_param ? '1' : '0', 0 };
 
     if (!save_entry_string( &entry->hdr, buf, flags )) return FALSE;
-    entry->bool.val = int_param != 0;
+    entry->bval.val = int_param != 0;
     entry->hdr.loaded = TRUE;
     return TRUE;
 }
@@ -3909,7 +3909,7 @@ static BOOL set_bool_entry( union sysparam_all_entry *entry, UINT int_param, voi
 /* initialize a bool parameter */
 static BOOL init_bool_entry( union sysparam_all_entry *entry )
 {
-    WCHAR buf[] = { entry->bool.val ? '1' : '0', 0 };
+    WCHAR buf[] = { entry->bval.val ? '1' : '0', 0 };
 
     return init_entry_string( &entry->hdr, buf );
 }
@@ -3922,9 +3922,9 @@ static BOOL get_yesno_entry( union sysparam_all_entry *entry, UINT int_param, vo
     if (!entry->hdr.loaded)
     {
         WCHAR buf[32];
-        if (load_entry( &entry->hdr, buf, sizeof(buf) )) entry->bool.val = !wcsicmp( yesW, buf );
+        if (load_entry( &entry->hdr, buf, sizeof(buf) )) entry->bval.val = !wcsicmp( yesW, buf );
     }
-    *(UINT *)ptr_param = entry->bool.val;
+    *(UINT *)ptr_param = entry->bval.val;
     return TRUE;
 }
 
@@ -3934,7 +3934,7 @@ static BOOL set_yesno_entry( union sysparam_all_entry *entry, UINT int_param, vo
     const WCHAR *str = int_param ? yesW : noW;
 
     if (!save_entry_string( &entry->hdr, str, flags )) return FALSE;
-    entry->bool.val = int_param != 0;
+    entry->bval.val = int_param != 0;
     entry->hdr.loaded = TRUE;
     return TRUE;
 }
@@ -3942,7 +3942,7 @@ static BOOL set_yesno_entry( union sysparam_all_entry *entry, UINT int_param, vo
 /* initialize a bool parameter using Yes/No strings */
 static BOOL init_yesno_entry( union sysparam_all_entry *entry )
 {
-    return init_entry_string( &entry->hdr, entry->bool.val ? yesW : noW );
+    return init_entry_string( &entry->hdr, entry->bval.val ? yesW : noW );
 }
 
 /* load a dword (binary) parameter from the registry */
