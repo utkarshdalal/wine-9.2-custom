@@ -137,7 +137,7 @@ static void value_free( struct value val )
 
 %nonassoc COND_ERROR
 
-%type <bool> expression boolean_term boolean_factor
+%type <bval> expression boolean_term boolean_factor
 %type <value> value
 %type <identifier> identifier
 %type <operator> operator
