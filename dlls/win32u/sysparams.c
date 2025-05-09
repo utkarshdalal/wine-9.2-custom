@@ -4377,16 +4377,16 @@ static BOOL set_entry( void *ptr, UINT int_param, void *ptr_param, UINT flags )
     { .uint = { { get_uint_entry, set_int_entry, init_int_entry, base, reg }, (val) } }
 
 #define BOOL_ENTRY(name,val,base,reg) union sysparam_all_entry entry_##name = \
-    { .bool = { { get_bool_entry, set_bool_entry, init_bool_entry, base, reg }, (val) } }
+    { .bval = { { get_bool_entry, set_bool_entry, init_bool_entry, base, reg }, (val) } }
 
 #define BOOL_ENTRY_MIRROR(name,val,base,reg,mirror_base) union sysparam_all_entry entry_##name = \
-    { .bool = { { get_bool_entry, set_bool_entry, init_bool_entry, base, reg, mirror_base, reg }, (val) } }
+    { .bval = { { get_bool_entry, set_bool_entry, init_bool_entry, base, reg, mirror_base, reg }, (val) } }
 
 #define TWIPS_ENTRY(name,val,base,reg) union sysparam_all_entry entry_##name = \
     { .uint = { { get_twips_entry, set_twips_entry, init_int_entry, base, reg }, (val) } }
 
 #define YESNO_ENTRY(name,val,base,reg) union sysparam_all_entry entry_##name = \
-    { .bool = { { get_yesno_entry, set_yesno_entry, init_yesno_entry, base, reg }, (val) } }
+    { .bval = { { get_yesno_entry, set_yesno_entry, init_yesno_entry, base, reg }, (val) } }
 
 #define DWORD_ENTRY(name,val,base,reg) union sysparam_all_entry entry_##name = \
     { .dword = { { get_dword_entry, set_dword_entry, init_dword_entry, base, reg }, (val) } }
