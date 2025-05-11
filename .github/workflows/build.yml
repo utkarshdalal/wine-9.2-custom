@@ -103,23 +103,40 @@ jobs:
 
                 echo 'Installing wine...'
                 make install DESTDIR=/stage
+                echo 'Stripping Wine binaries...'
+                find /stage/opt/wine/bin -type f -exec strip --strip-all {} +
+                find /stage/opt/wine/lib -type f -name '*.so*' -exec strip --strip-all {} +
                 tar -C /stage -caf /wine-opt.txz opt/wine
             EOF
             sudo mv /mnt/arch/wine-opt.txz .
 
-      - name: "Upload built Wine"
-        uses: actions/upload-artifact@v4
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
         with:
-          name: wine-opt
-          path: wine-opt.txz
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+
+      - name: Upload wine-opt asset
+        uses: actions/upload-release-asset@v1
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: wine-opt.txz
+          asset_name: wine-opt.txz
+          asset_content_type: application/x-xz
 
       - name: merge new wine into imagefs
         run: |
             rm -rf imagefs/opt/wine
             tar -xf wine-opt.txz -C imagefs          # overwrites workroot/opt/wine
             tar -C imagefs -caf imagefs-new.txz .
-      
-      - uses: actions/upload-artifact@v4
+
+      - name: Upload imagefs-new asset
+        uses: actions/upload-release-asset@v1
         with:
-          name: imagefs-new
-          path: imagefs-new.txz
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: imagefs-new.txz
+          asset_name: imagefs-new.txz
+          asset_content_type: application/x-xz
