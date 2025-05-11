@@ -66,9 +66,19 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: "Copy Repository to Chroot"
+      - name: "Sync Repository to Chroot"
         run: |
-          sudo cp -rf $PWD /mnt/arch/wine-custom
+          sudo mkdir -p /mnt/arch/wine-custom
+          sudo rsync -a --delete "$PWD"/ /mnt/arch/wine-custom/
+
+      - name: Cache Wine build
+        id: cache-wine-build
+        uses: actions/cache@v3
+        with:
+          path: /mnt/arch/wine-custom
+          key: ${{ runner.os }}-wine-build-${{ github.ref_name }}
+          restore-keys: |
+            ${{ runner.os }}-wine-build-
 
       - name: "Unpack imagefs"
         run: |
@@ -76,17 +86,14 @@ jobs:
           mkdir -p imagefs
           tar -xf imagefs.txz -C imagefs
 
-      - name: "Build Wine for x86_64"
+      - name: "Configure Wine"
         run: |
             sudo arch-chroot /mnt/arch bash << 'EOF'
                 #!/bin/bash
-                set -e  # Exit on any error
-                set -x  # Print commands as they're executed
-                
+                set -e
+                set -x
                 pacman -Sy --noconfirm autoconf automake pkgconf clang gcc-multilib mingw-w64-gcc mingw-w64-crt mingw-w64-binutils mingw-w64-headers
                 cd /wine-custom
-                
-                # Build wine for glibc x86_64
                 echo 'Configuring ARM64 build...'
                 ./configure --enable-archs=i386,x86_64 \
                     --prefix=/opt/wine \
@@ -97,18 +104,54 @@ jobs:
                     --without-pcap --without-gphoto --without-v4l2 --without-pcsclite \
                     --without-wayland --without-opencl --without-dbus --without-sane \
                     --without-udev --without-capi --without-xshm --without-xxf86vm
+            EOF
 
+      - name: "Build Wine"
+        if: steps.cache-wine-build.outputs.cache-hit != 'true'
+        run: |
+            sudo arch-chroot /mnt/arch bash << 'EOF'
+                #!/bin/bash
+                set -e
+                set -x
+                cd /wine-custom
                 echo 'Building wine...'
                 make -j$(nproc)
+            EOF
 
+      - name: "Install Wine"
+        run: |
+            sudo arch-chroot /mnt/arch bash << 'EOF'
+                #!/bin/bash
+                set -e
+                set -x
+                cd /wine-custom
                 echo 'Installing wine...'
                 make install DESTDIR=/stage
-                echo 'Stripping Wine binaries...'
-                find /stage/opt/wine/bin -type f -exec strip --strip-all {} +
-                find /stage/opt/wine/lib -type f -name '*.so*' -exec strip --strip-all {} +
-                tar -C /stage -caf /wine-opt.txz opt/wine
             EOF
-            sudo mv /mnt/arch/wine-opt.txz .
+
+      - name: "Strip Wine binaries"
+        run: |
+            sudo arch-chroot /mnt/arch bash << 'EOF'
+                #!/bin/bash
+                set -e
+                set -x
+                echo 'Stripping Wine binaries...'
+                # Only strip ELF executables in bin
+                find /stage/opt/wine/bin -type f -exec sh -c 'file "$1" | grep -q ELF && strip --strip-all "$1"' _ {} \;
+                # Strip shared libraries
+                find /stage/opt/wine/lib -type f -name '*.so*' -exec strip --strip-all {} +
+            EOF
+
+      - name: "Package Wine"
+        run: |
+            sudo tar -C /mnt/arch/stage -caf wine-opt.txz opt/wine
+
+      - name: Save Wine build cache
+        if: steps.cache-wine-build.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v3
+        with:
+          path: /mnt/arch/wine-custom
+          key: ${{ runner.os }}-wine-build-${{ github.ref_name }}
 
       - name: Create Release
         id: create_release
