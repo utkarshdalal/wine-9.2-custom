@@ -221,6 +221,7 @@ msgstr "&Instalar"
 #: programs/winefile/winefile.rc:181 programs/winemine/winemine.rc:99
 #: programs/wordpad/wordpad.rc:216 programs/wordpad/wordpad.rc:227
 #: programs/wordpad/wordpad.rc:245 programs/wordpad/wordpad.rc:258
+#: programs/explorer/explorer.rc:43
 msgid "Cancel"
 msgstr "Cancelar"
 
@@ -14936,6 +14937,18 @@ msgstr "&Sair do Windows"
 msgid ""
 "Are you sure you want to close all programs and exit the virtual desktop?"
 msgstr "Tem certeza que deseja excluir estes valores?"
+
+#: programs/explorer/explorer.rc:39
+msgid "Restart desktop"
+msgstr "Reiniciar o Windows"
+
+#: programs/explorer/explorer.rc:40
+msgid "Reconfigure Wine"
+msgstr "Reconfigurar o Wine"
+
+#: programs/explorer/explorer.rc:41
+msgid "What action do you want to perform?"
+msgstr "Qual ação você deseja executar?"
 
 #: programs/findstr/findstr.rc:28
 #, fuzzy
