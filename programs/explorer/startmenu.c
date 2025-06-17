@@ -64,9 +64,31 @@ static INT_PTR CALLBACK wineboot_dlgproc(HWND hwnd, UINT msg, WPARAM wparam, LPA
     switch (msg)
     {
     case WM_INITDIALOG:
-        CheckRadioButton(hwnd, IDC_RAD1, IDC_RAD3, IDC_RAD1);
-        ShowWindow(hwnd, SW_SHOWNORMAL);
-        return TRUE;
+        {
+            WCHAR label[64];
+            CheckRadioButton(hwnd, IDC_RAD1, IDC_RAD3, IDC_RAD1);
+            
+            LoadStringW(NULL, IDS_WINE_BOOT_PROMPT, label, ARRAY_SIZE(label));
+            SetWindowTextW(GetDlgItem(hwnd, IDC_LABEL), label);
+            
+            LoadStringW(NULL, IDS_EXIT_LABEL, label, ARRAY_SIZE(label));
+            SetWindowTextW(GetDlgItem(hwnd, IDC_RAD1), label);
+            
+            LoadStringW(NULL, IDS_RESTART_LABEL, label, ARRAY_SIZE(label));
+            SetWindowTextW(GetDlgItem(hwnd, IDC_RAD2), label);
+            
+            LoadStringW(NULL, IDS_RECONFIGURE_WINE, label, ARRAY_SIZE(label));
+            SetWindowTextW(GetDlgItem(hwnd, IDC_RAD3), label);
+            
+            LoadStringW(NULL, IDS_OK, label, ARRAY_SIZE(label));
+            SetWindowTextW(GetDlgItem(hwnd, IDOK), label);
+            
+            LoadStringW(NULL, IDS_CANCEL, label, ARRAY_SIZE(label));
+            SetWindowTextW(GetDlgItem(hwnd, IDCANCEL), label);            
+            
+            ShowWindow(hwnd, SW_SHOWNORMAL);
+            return TRUE;
+        }
     case WM_COMMAND:
         switch (wparam)
         {

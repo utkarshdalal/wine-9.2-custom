@@ -28,11 +28,18 @@ LANGUAGE LANG_ENGLISH, SUBLANG_DEFAULT
 
 STRINGTABLE
 {
-    IDS_EXPLORER_TITLE  "Wine Explorer"
-    IDS_PATHBOX_LABEL   "Location:"
-    IDS_START_LABEL     "Start"
-    IDS_RUN             "&Run..."
-    IDS_WINEBOOT_LABEL  "Wine Boot..."
+    IDS_EXPLORER_TITLE   "Wine Explorer"
+    IDS_PATHBOX_LABEL    "Location:"
+    IDS_START_LABEL      "Start"
+    IDS_RUN              "&Run..."
+    IDS_EXIT_LABEL       "E&xit Windows"
+    IDS_EXIT_PROMPT      "Are you sure you want to close all programs and exit the virtual desktop?"
+    IDS_WINEBOOT_LABEL   "Wine Boot..."
+    IDS_RESTART_LABEL    "Restart Windows"
+    IDS_RECONFIGURE_WINE "Reconfigure Wine"
+    IDS_WINE_BOOT_PROMPT "What action do you want to perform?"
+    IDS_OK               "OK"
+    IDS_CANCEL           "Cancel"
 }
 
 LANGUAGE LANG_NEUTRAL, SUBLANG_NEUTRAL
@@ -51,13 +58,13 @@ STYLE DS_MODALFRAME | WS_POPUP | WS_CAPTION | WS_SYSMENU | DS_CENTER
 CAPTION "Wine Boot"
 FONT 8, "MS Shell Dlg"
 BEGIN
-    LTEXT "What action do you want to perform?", IDC_STATIC, 45, 10, 150, 10
+    LTEXT "", IDC_LABEL, 45, 10, 150, 10
     ICON ICO_COMPUTER, IDC_STATIC, 10, 10, 32, 32
-    AUTORADIOBUTTON "Exit Desktop", IDC_RAD1, 45, 25, 150, 10
-    AUTORADIOBUTTON "Restart Desktop", IDC_RAD2, 45, 35, 150, 10
-    AUTORADIOBUTTON "Reconfigure Wine", IDC_RAD3, 45, 45, 150, 10
-    DEFPUSHBUTTON "OK", IDOK, 85, 65, 50, 14, WS_GROUP | BS_DEFPUSHBUTTON
-    PUSHBUTTON "Cancel", IDCANCEL, 140, 65, 50, 14, WS_GROUP    
+    AUTORADIOBUTTON "", IDC_RAD1, 45, 25, 150, 10
+    AUTORADIOBUTTON "", IDC_RAD2, 45, 35, 150, 10
+    AUTORADIOBUTTON "", IDC_RAD3, 45, 45, 150, 10
+    DEFPUSHBUTTON "", IDOK, 85, 65, 50, 14, WS_GROUP | BS_DEFPUSHBUTTON
+    PUSHBUTTON "", IDCANCEL, 140, 65, 50, 14, WS_GROUP    
 END
 
 /* @makedep: explorer.manifest */

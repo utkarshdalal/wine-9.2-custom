@@ -25,7 +25,14 @@
 #define IDS_PATHBOX_LABEL 2
 #define IDS_START_LABEL 3
 #define IDS_RUN 4
-#define IDS_WINEBOOT_LABEL 5
+#define IDS_EXIT_LABEL 5
+#define IDS_EXIT_PROMPT 6
+#define IDS_WINEBOOT_LABEL 7
+#define IDS_RESTART_LABEL 8
+#define IDS_RECONFIGURE_WINE 9
+#define IDS_WINE_BOOT_PROMPT 10
+#define IDS_OK 11
+#define IDS_CANCEL 12
 
 #define IDC_STATIC -1
 #define IDD_WINEBOOT 100
@@ -33,6 +40,7 @@
 #define IDC_RAD2 102
 #define IDC_RAD3 103
 #define IDC_GRP1 104
+#define IDC_LABEL 105
 
 #define ICO_COMPUTER 200
 
