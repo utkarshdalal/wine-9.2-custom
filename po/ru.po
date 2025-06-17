@@ -228,6 +228,7 @@ msgstr "&Установить"
 #: programs/winefile/winefile.rc:181 programs/winemine/winemine.rc:99
 #: programs/wordpad/wordpad.rc:216 programs/wordpad/wordpad.rc:227
 #: programs/wordpad/wordpad.rc:245 programs/wordpad/wordpad.rc:258
+#: programs/explorer/explorer.rc:43
 msgid "Cancel"
 msgstr "Отмена"
 
@@ -15167,6 +15168,18 @@ msgstr "Вы&ход из Windows"
 msgid ""
 "Are you sure you want to close all programs and exit the virtual desktop?"
 msgstr "Вы уверены что хотите удалить эти значения?"
+
+#: programs/explorer/explorer.rc:39
+msgid "Restart desktop"
+msgstr "Перезагрузить Windows"
+
+#: programs/explorer/explorer.rc:40
+msgid "Reconfigure Wine"
+msgstr "Перенастроить Wine"
+
+#: programs/explorer/explorer.rc:41
+msgid "What action do you want to perform?"
+msgstr "Какое действие вы хотите выполнить?"
 
 #: programs/findstr/findstr.rc:28
 #, fuzzy
