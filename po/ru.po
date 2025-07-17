@@ -15170,7 +15170,7 @@ msgid ""
 msgstr "Вы уверены что хотите удалить эти значения?"
 
 #: programs/explorer/explorer.rc:39
-msgid "Restart desktop"
+msgid "Restart Windows"
 msgstr "Перезагрузить Windows"
 
 #: programs/explorer/explorer.rc:40
