@@ -14939,7 +14939,7 @@ msgid ""
 msgstr "Tem certeza que deseja excluir estes valores?"
 
 #: programs/explorer/explorer.rc:39
-msgid "Restart desktop"
+msgid "Restart Windows"
 msgstr "Reiniciar o Windows"
 
 #: programs/explorer/explorer.rc:40
