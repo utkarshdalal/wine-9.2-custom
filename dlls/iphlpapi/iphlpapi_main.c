@@ -44,22 +44,8 @@
 WINE_DEFAULT_DEBUG_CHANNEL(iphlpapi);
 
 #define CHARS_IN_GUID 39
-#define ADAPTER_INFO_PATH "/data/data/com.winlator/files/rootfs/tmp/adapterinfo"
-#define ADAPTER_INFO_UUID "{f40158d8-f074-47e4-a039-cff6a16846e0}"
 
 static const WCHAR *device_tcpip = L"\\DEVICE\\TCPIP_";
-
-struct adapter_info 
-{
-    char *name;
-    char *ip_address;
-    char *netmask;
-    char *gateway;
-    BOOL active;
-};
-
-static struct adapter_info* cached_adapters_info = NULL;
-static int cached_adapter_info_size = 0;
 
 DWORD WINAPI AllocateAndGetIpAddrTableFromStack( MIB_IPADDRTABLE **table, BOOL sort, HANDLE heap, DWORD flags );
 
@@ -232,73 +218,6 @@ DWORD WINAPI CreateProxyArpEntry(DWORD dwAddress, DWORD dwMask, DWORD dwIfIndex)
   FIXME("(dwAddress 0x%08lx, dwMask 0x%08lx, dwIfIndex 0x%08lx): stub\n",
    dwAddress, dwMask, dwIfIndex);
   return ERROR_NOT_SUPPORTED;
-}
-
-static struct adapter_info* read_adapters_info_from_file( int *adapter_info_size ) 
-{
-    FILE *file;
-    struct adapter_info* adapters_info = NULL;
-    *adapter_info_size = 0;
-    
-    if (cached_adapters_info != NULL) 
-    {
-        *adapter_info_size = cached_adapter_info_size;
-        return cached_adapters_info;
-    }
-    
-    file = fopen( ADAPTER_INFO_PATH, "r" );
-    if (file != NULL) 
-    {
-        int col, index, list_size = 0;
-        char* value;
-        const size_t line_size = 128;
-        char *line = malloc( line_size );
-        struct adapter_info *adapter_info;
-        
-        while (fgets( line, line_size, file ) != NULL)
-        {
-            index = list_size++;
-            adapters_info = realloc( adapters_info, list_size * sizeof(struct adapter_info) );
-            adapter_info = &adapters_info[index];
-
-            col = 0;
-            value = strtok( line, "," );
-            while (value) 
-            {
-                switch (col)
-                {
-                case 0:
-                    adapter_info->name = strdup( value );
-                    break;
-                case 1:
-                    adapter_info->ip_address = strdup( value );
-                    break;
-                case 2:
-                    adapter_info->netmask = strdup( value );
-                    break;
-                case 3:
-                    adapter_info->gateway = strdup( value );
-                    break;
-                case 4:
-                    adapter_info->active = value[0] == '1' ? TRUE : FALSE;
-                    break;
-                }
-
-                value = strtok( NULL, "," );
-                col++;
-            }     
-        }
-        
-        free( line );        
-        fclose( file );
-        
-        *adapter_info_size = list_size;
-        
-        cached_adapters_info = adapters_info;
-        cached_adapter_info_size = list_size;
-    }
-    
-    return adapters_info;
 }
 
 static char *debugstr_ipv6(const struct sockaddr_in6 *sin, char *buf)
@@ -676,194 +595,140 @@ static void ip_addr_string_init( IP_ADDR_STRING *s, const IN_ADDR *addr, const I
  */
 DWORD WINAPI GetAdaptersInfo( IP_ADAPTER_INFO *info, ULONG *size )
 {
-    int adapter_info_size;
-    struct adapter_info *adapters_info;
-    
+    DWORD err, if_count, if_num = 0, uni_count, fwd_count, needed, wins_server_count;
+    DWORD len, i, uni, fwd;
+    NET_LUID *if_keys = NULL;
+    struct nsi_ndis_ifinfo_rw *if_rw = NULL;
+    struct nsi_ndis_ifinfo_static *if_stat = NULL;
+    struct nsi_ipv4_unicast_key *uni_keys = NULL;
+    struct nsi_ip_unicast_rw *uni_rw = NULL;
+    struct nsi_ipv4_forward_key *fwd_keys = NULL;
+    SOCKADDR_INET *wins_servers = NULL;
+    IP_ADDR_STRING *extra_ip_addrs, *cursor;
+    IN_ADDR gw, mask;
+
     TRACE( "info %p, size %p\n", info, size );
     if (!size) return ERROR_INVALID_PARAMETER;
-    
-    adapters_info = read_adapters_info_from_file( &adapter_info_size );
-    if (adapters_info != NULL && adapter_info_size > 0) 
+
+    err = NsiAllocateAndGetTable( 1, &NPI_MS_NDIS_MODULEID, NSI_NDIS_IFINFO_TABLE,
+                                  (void **)&if_keys, sizeof(*if_keys), (void **)&if_rw, sizeof(*if_rw),
+                                  NULL, 0, (void **)&if_stat, sizeof(*if_stat), &if_count, 0 );
+
+    if (err) return err;
+    for (i = 0; i < if_count; i++)
     {
-        DWORD i, needed;
-        IN_ADDR addr, mask;
-        
-        needed = adapter_info_size * sizeof(*info);
-        if (!info || *size < needed)
-        {
-            *size = needed;
-            return ERROR_BUFFER_OVERFLOW;
-        }
-        
-        for (i = 0; i < adapter_info_size; i++) 
-        {
-            TRACE( "adapter %s %s %s %s %d\n", adapters_info[i].name, adapters_info[i].ip_address, adapters_info[i].netmask, adapters_info[i].gateway, adapters_info[i].active );
-            
-            info->Next = info + 1;
-            info->ComboIndex = 0;
-            strcpy( info->AdapterName, ADAPTER_INFO_UUID );
-            strcpy( info->Description, adapters_info[i].name );
-            info->AddressLength = 6;
-            memset(&info->Address, 0, 6);
-            info->Index = i;
-            info->Type = IF_TYPE_IEEE80211;
-            info->DhcpEnabled = FALSE; /* FIXME */
-            info->CurrentIpAddress = NULL;
-            
-            addr.s_addr = inet_addr( adapters_info[i].ip_address );
-            mask.s_addr = inet_addr( adapters_info[i].netmask );
-            ip_addr_string_init( &info->IpAddressList, &addr, &mask, 0 );
-            
-            addr.s_addr = inet_addr( adapters_info[i].gateway );
-            ip_addr_string_init( &info->GatewayList, &addr, &mask, 0 );
-            ip_addr_string_init( &info->DhcpServer, NULL, NULL, 0 );
-            
-            info->HaveWins = FALSE;
-            ip_addr_string_init( &info->PrimaryWinsServer, NULL, NULL, 0 );
-            ip_addr_string_init( &info->SecondaryWinsServer, NULL, NULL, 0 );
-            info->LeaseObtained = 0;
-            info->LeaseExpires = 0;
-            
-            info++;
-        }
-        
-        info[-1].Next = NULL;
-        return 0;
+        if (if_stat[i].type == IF_TYPE_SOFTWARE_LOOPBACK) continue;
+        if_num++;
     }
-    else 
+
+    if (!if_num)
     {
-        DWORD err, if_count, if_num = 0, uni_count, fwd_count, needed, wins_server_count;
-        DWORD len, i, uni, fwd;
-        NET_LUID *if_keys = NULL;
-        struct nsi_ndis_ifinfo_rw *if_rw = NULL;
-        struct nsi_ndis_ifinfo_static *if_stat = NULL;
-        struct nsi_ipv4_unicast_key *uni_keys = NULL;
-        struct nsi_ip_unicast_rw *uni_rw = NULL;
-        struct nsi_ipv4_forward_key *fwd_keys = NULL;
-        SOCKADDR_INET *wins_servers = NULL;
-        IP_ADDR_STRING *extra_ip_addrs, *cursor;
-        IN_ADDR gw, mask;
+        err = ERROR_NO_DATA;
+        goto err;
+    }
 
-        err = NsiAllocateAndGetTable( 1, &NPI_MS_NDIS_MODULEID, NSI_NDIS_IFINFO_TABLE,
-                                      (void **)&if_keys, sizeof(*if_keys), (void **)&if_rw, sizeof(*if_rw),
-                                      NULL, 0, (void **)&if_stat, sizeof(*if_stat), &if_count, 0 );
+    err = NsiAllocateAndGetTable( 1, &NPI_MS_IPV4_MODULEID, NSI_IP_UNICAST_TABLE,
+                                  (void **)&uni_keys, sizeof(*uni_keys), (void **)&uni_rw, sizeof(*uni_rw),
+                                  NULL, 0, NULL, 0, &uni_count, 0 );
+    if (err) goto err;
 
-        if (err) return err;
-        for (i = 0; i < if_count; i++)
+    /* Slightly overestimate the needed size by assuming that all
+       unicast addresses require a separate IP_ADDR_STRING. */
+
+    needed = if_num * sizeof(*info) + uni_count * sizeof(IP_ADDR_STRING);
+    if (!info || *size < needed)
+    {
+        *size = needed;
+        err = ERROR_BUFFER_OVERFLOW;
+        goto err;
+    }
+
+    err = NsiAllocateAndGetTable( 1, &NPI_MS_IPV4_MODULEID, NSI_IP_FORWARD_TABLE,
+                                  (void **)&fwd_keys, sizeof(*fwd_keys), NULL, 0,
+                                  NULL, 0, NULL, 0, &fwd_count, 0 );
+    if (err) goto err;
+
+    wins_server_count = get_wins_servers( &wins_servers );
+
+    extra_ip_addrs = (IP_ADDR_STRING *)(info + if_num);
+    for (i = 0; i < if_count; i++)
+    {
+        if (if_stat[i].type == IF_TYPE_SOFTWARE_LOOPBACK) continue;
+
+        info->Next = info + 1;
+        info->ComboIndex = 0;
+        ConvertGuidToStringA( &if_stat[i].if_guid, info->AdapterName, sizeof(info->AdapterName) );
+        len = WideCharToMultiByte( CP_ACP, 0, if_stat[i].descr.String, if_stat[i].descr.Length / sizeof(WCHAR),
+                                   info->Description, sizeof(info->Description) - 1, NULL, NULL );
+        info->Description[len] = '\0';
+        info->AddressLength = if_rw[i].phys_addr.Length;
+        if (info->AddressLength > sizeof(info->Address)) info->AddressLength = 0;
+        memcpy( info->Address, if_rw[i].phys_addr.Address, info->AddressLength );
+        memset( info->Address + info->AddressLength, 0, sizeof(info->Address) - info->AddressLength );
+        info->Index = if_stat[i].if_index;
+        info->Type = if_stat[i].type;
+        info->DhcpEnabled = TRUE; /* FIXME */
+        info->CurrentIpAddress = NULL;
+
+        cursor = NULL;
+        for (uni = 0; uni < uni_count; uni++)
         {
-            if (if_stat[i].type == IF_TYPE_SOFTWARE_LOOPBACK) continue;
-            if_num++;
-        }
-
-        if (!if_num)
-        {
-            err = ERROR_NO_DATA;
-            goto err;
-        }
-
-        err = NsiAllocateAndGetTable( 1, &NPI_MS_IPV4_MODULEID, NSI_IP_UNICAST_TABLE,
-                                      (void **)&uni_keys, sizeof(*uni_keys), (void **)&uni_rw, sizeof(*uni_rw),
-                                      NULL, 0, NULL, 0, &uni_count, 0 );
-        if (err) goto err;
-
-        /* Slightly overestimate the needed size by assuming that all
-           unicast addresses require a separate IP_ADDR_STRING. */
-
-        needed = if_num * sizeof(*info) + uni_count * sizeof(IP_ADDR_STRING);
-        if (!info || *size < needed)
-        {
-            *size = needed;
-            err = ERROR_BUFFER_OVERFLOW;
-            goto err;
-        }
-
-        err = NsiAllocateAndGetTable( 1, &NPI_MS_IPV4_MODULEID, NSI_IP_FORWARD_TABLE,
-                                      (void **)&fwd_keys, sizeof(*fwd_keys), NULL, 0,
-                                      NULL, 0, NULL, 0, &fwd_count, 0 );
-        if (err) goto err;
-
-        wins_server_count = get_wins_servers( &wins_servers );
-
-        extra_ip_addrs = (IP_ADDR_STRING *)(info + if_num);
-        for (i = 0; i < if_count; i++)
-        {
-            if (if_stat[i].type == IF_TYPE_SOFTWARE_LOOPBACK) continue;
-
-            info->Next = info + 1;
-            info->ComboIndex = 0;
-            ConvertGuidToStringA( &if_stat[i].if_guid, info->AdapterName, sizeof(info->AdapterName) );
-            len = WideCharToMultiByte( CP_ACP, 0, if_stat[i].descr.String, if_stat[i].descr.Length / sizeof(WCHAR),
-                                       info->Description, sizeof(info->Description) - 1, NULL, NULL );
-            info->Description[len] = '\0';
-            info->AddressLength = if_rw[i].phys_addr.Length;
-            if (info->AddressLength > sizeof(info->Address)) info->AddressLength = 0;
-            memcpy( info->Address, if_rw[i].phys_addr.Address, info->AddressLength );
-            memset( info->Address + info->AddressLength, 0, sizeof(info->Address) - info->AddressLength );
-            info->Index = if_stat[i].if_index;
-            info->Type = if_stat[i].type;
-            info->DhcpEnabled = TRUE; /* FIXME */
-            info->CurrentIpAddress = NULL;
-
-            cursor = NULL;
-            for (uni = 0; uni < uni_count; uni++)
+            if (uni_keys[uni].luid.Value != if_keys[i].Value) continue;
+            if (!cursor) cursor = &info->IpAddressList;
+            else
             {
-                if (uni_keys[uni].luid.Value != if_keys[i].Value) continue;
-                if (!cursor) cursor = &info->IpAddressList;
-                else
-                {
-                    cursor->Next = extra_ip_addrs++;
-                    cursor = cursor->Next;
-                }
-                ConvertLengthToIpv4Mask( uni_rw[uni].on_link_prefix, &mask.s_addr );
-                ip_addr_string_init( cursor, &uni_keys[uni].addr, &mask, 0 );
+                cursor->Next = extra_ip_addrs++;
+                cursor = cursor->Next;
             }
-            if (!cursor)
-            {
-                mask.s_addr = INADDR_ANY;
-                ip_addr_string_init( &info->IpAddressList, &mask, &mask, 0 );
-            }
+            ConvertLengthToIpv4Mask( uni_rw[uni].on_link_prefix, &mask.s_addr );
+            ip_addr_string_init( cursor, &uni_keys[uni].addr, &mask, 0 );
+        }
+        if (!cursor)
+        {
+            mask.s_addr = INADDR_ANY;
+            ip_addr_string_init( &info->IpAddressList, &mask, &mask, 0 );
+        }
 
-            gw.s_addr = INADDR_ANY;
+        gw.s_addr = INADDR_ANY;
+        mask.s_addr = INADDR_NONE;
+        for (fwd = 0; fwd < fwd_count; fwd++)
+        { /* find the first router on this interface */
+            if (fwd_keys[fwd].luid.Value == if_keys[i].Value &&
+                fwd_keys[fwd].next_hop.s_addr != INADDR_ANY &&
+                !fwd_keys[fwd].prefix_len)
+            {
+                gw = fwd_keys[fwd].next_hop;
+                break;
+            }
+        }
+        ip_addr_string_init( &info->GatewayList, &gw, &mask, 0 );
+
+        ip_addr_string_init( &info->DhcpServer, NULL, NULL, 0 );
+
+        info->HaveWins = !!wins_server_count;
+        ip_addr_string_init( &info->PrimaryWinsServer, NULL, NULL, 0 );
+        ip_addr_string_init( &info->SecondaryWinsServer, NULL, NULL, 0 );
+        if (info->HaveWins)
+        {
             mask.s_addr = INADDR_NONE;
-            for (fwd = 0; fwd < fwd_count; fwd++)
-            { /* find the first router on this interface */
-                if (fwd_keys[fwd].luid.Value == if_keys[i].Value &&
-                    fwd_keys[fwd].next_hop.s_addr != INADDR_ANY &&
-                    !fwd_keys[fwd].prefix_len)
-                {
-                    gw = fwd_keys[fwd].next_hop;
-                    break;
-                }
-            }
-            ip_addr_string_init( &info->GatewayList, &gw, &mask, 0 );
-
-            ip_addr_string_init( &info->DhcpServer, NULL, NULL, 0 );
-
-            info->HaveWins = !!wins_server_count;
-            ip_addr_string_init( &info->PrimaryWinsServer, NULL, NULL, 0 );
-            ip_addr_string_init( &info->SecondaryWinsServer, NULL, NULL, 0 );
-            if (info->HaveWins)
-            {
-                mask.s_addr = INADDR_NONE;
-                ip_addr_string_init( &info->PrimaryWinsServer, &wins_servers[0].Ipv4.sin_addr, &mask, 0 );
-                if (wins_server_count > 1)
-                    ip_addr_string_init( &info->SecondaryWinsServer, &wins_servers[1].Ipv4.sin_addr, &mask, 0 );
-            }
-
-            info->LeaseObtained = 0;
-            info->LeaseExpires = 0;
-
-            info++;
+            ip_addr_string_init( &info->PrimaryWinsServer, &wins_servers[0].Ipv4.sin_addr, &mask, 0 );
+            if (wins_server_count > 1)
+                ip_addr_string_init( &info->SecondaryWinsServer, &wins_servers[1].Ipv4.sin_addr, &mask, 0 );
         }
-        info[-1].Next = NULL;
+
+        info->LeaseObtained = 0;
+        info->LeaseExpires = 0;
+
+        info++;
+    }
+    info[-1].Next = NULL;
 
 err:
-        heap_free( wins_servers );
-        NsiFreeTable( fwd_keys, NULL, NULL, NULL );
-        NsiFreeTable( uni_keys, uni_rw, NULL, NULL );
-        NsiFreeTable( if_keys, if_rw, NULL, if_stat );
-        return err;
-    }
+    heap_free( wins_servers );
+    NsiFreeTable( fwd_keys, NULL, NULL, NULL );
+    NsiFreeTable( uni_keys, uni_rw, NULL, NULL );
+    NsiFreeTable( if_keys, if_rw, NULL, if_stat );
+    return err;
 }
 
 static void address_entry_free( void *ptr, ULONG offset, void *ctxt )
@@ -1128,6 +993,7 @@ static DWORD gateway_and_prefix_addresses_alloc( IP_ADAPTER_ADDRESSES *aa, ULONG
 {
     struct nsi_ipv4_forward_key *key4;
     struct nsi_ipv6_forward_key *key6;
+    struct nsi_ip_forward_rw *rw;
     IP_ADAPTER_GATEWAY_ADDRESS *gw, **gw_next;
     IP_ADAPTER_PREFIX *prefix, **prefix_next;
     DWORD err, count, i, prefix_len, key_size = (family == AF_INET) ? sizeof(*key4) : sizeof(*key6);
@@ -1137,11 +1003,14 @@ static DWORD gateway_and_prefix_addresses_alloc( IP_ADAPTER_ADDRESSES *aa, ULONG
     void *key;
 
     err = NsiAllocateAndGetTable( 1, ip_module_id( family ), NSI_IP_FORWARD_TABLE, &key, key_size,
-                                  NULL, 0, NULL, 0, NULL, 0, &count, 0 );
+                                  (void **)&rw, sizeof(*rw), NULL, 0, NULL, 0, &count, 0 );
     if (err) return err;
 
     while (aa)
     {
+        if (family == AF_INET) aa->Ipv4Metric = ~0u;
+        else                   aa->Ipv6Metric = ~0u;
+
         for (gw_next = &aa->FirstGatewayAddress; *gw_next; gw_next = &(*gw_next)->Next)
             ;
         for (prefix_next = &aa->FirstPrefix; *prefix_next; prefix_next = &(*prefix_next)->Next)
@@ -1153,6 +1022,12 @@ static DWORD gateway_and_prefix_addresses_alloc( IP_ADAPTER_ADDRESSES *aa, ULONG
             key6 = (struct nsi_ipv6_forward_key *)key + i;
             luid = (family == AF_INET) ? &key4->luid : &key6->luid;
             if (luid->Value != aa->Luid.Value) continue;
+
+            if (rw[i].metric)
+            {
+                if (family == AF_INET) aa->Ipv4Metric = min( aa->Ipv4Metric, rw[i].metric );
+                else                   aa->Ipv6Metric = min( aa->Ipv6Metric, rw[i].metric );
+            }
 
             if (flags & GAA_FLAG_INCLUDE_GATEWAYS)
             {
@@ -1238,7 +1113,7 @@ static DWORD gateway_and_prefix_addresses_alloc( IP_ADAPTER_ADDRESSES *aa, ULONG
     }
 
 err:
-    NsiFreeTable( key, NULL, NULL, NULL );
+    NsiFreeTable( key, rw, NULL, NULL );
     return err;
 }
 
@@ -1404,11 +1279,8 @@ static DWORD adapters_addresses_alloc( ULONG family, ULONG flags, IP_ADAPTER_ADD
         if (err) goto err;
     }
 
-    if (flags & (GAA_FLAG_INCLUDE_GATEWAYS | GAA_FLAG_INCLUDE_PREFIX))
-    {
-        err = call_families( gateway_and_prefix_addresses_alloc, aa, family, flags );
-        if (err) goto err;
-    }
+    err = call_families( gateway_and_prefix_addresses_alloc, aa, family, flags );
+    if (err) goto err;
 
     err = dns_info_alloc( aa, family, flags );
     if (err) goto err;
@@ -1423,108 +1295,27 @@ err:
 ULONG WINAPI DECLSPEC_HOTPATCH GetAdaptersAddresses( ULONG family, ULONG flags, void *reserved,
                                                      IP_ADAPTER_ADDRESSES *aa, ULONG *size )
 {
-    int adapter_info_size;
-    struct adapter_info *adapters_info; 
-    
+    IP_ADAPTER_ADDRESSES *info;
+    DWORD err, needed;
+
     TRACE( "(%ld, %08lx, %p, %p, %p)\n", family, flags, reserved, aa, size );
 
-    if (!size) return ERROR_INVALID_PARAMETER;  
-    
-    adapters_info = read_adapters_info_from_file( &adapter_info_size );
-    if (adapters_info != NULL && adapter_info_size > 0) 
+    if (!size) return ERROR_INVALID_PARAMETER;
+
+    err = adapters_addresses_alloc( family, flags, &info );
+    if (err) return err;
+
+    needed = adapters_addresses_size( info );
+    if (!aa || *size < needed)
     {
-        DWORD i, needed;
-        const int dns_suffix_len = 7;
-        const int adapter_name_len = 39;
-        const int friendly_name_len = 64;
-        const int aa_len = sizeof(*aa) + dns_suffix_len + adapter_name_len + friendly_name_len;
-        
-        needed = adapter_info_size * (aa_len + sizeof(IP_ADAPTER_UNICAST_ADDRESS) + sizeof(SOCKADDR_IN) + sizeof(IP_ADAPTER_GATEWAY_ADDRESS) + sizeof(SOCKADDR_IN));
-        if (!aa || *size < needed)
-        {
-            *size = needed;
-            return ERROR_BUFFER_OVERFLOW;
-        }
-        
-        for (i = 0; i < adapter_info_size; i++) 
-        {
-            WCHAR *friendly_name = heap_alloc_zero( friendly_name_len );
-            
-            TRACE( "adapter %s %s %s %s %d\n", adapters_info[i].name, adapters_info[i].ip_address, adapters_info[i].netmask, adapters_info[i].gateway, adapters_info[i].active );
-            
-            MultiByteToWideChar( CP_ACP, 0, adapters_info[i].name, -1, friendly_name, friendly_name_len );
-            
-            aa->Next = aa + 1;
-            aa->Length = aa_len;
-            aa->IfIndex = i;
-            aa->DnsSuffix = (WCHAR *)L"box";
-            aa->AdapterName = (CHAR *)ADAPTER_INFO_UUID;
-            
-            aa->Description = friendly_name;
-            aa->FriendlyName = friendly_name;
-            aa->PhysicalAddressLength = 6;
-            memset(&aa->PhysicalAddress, 0, 6);
-            aa->Mtu = 1;
-            aa->IfType = IF_TYPE_IEEE80211;
-            aa->OperStatus = 1;
-            aa->TransmitLinkSpeed = 144400000;
-            aa->ReceiveLinkSpeed = 144400000;
-            aa->ConnectionType = NET_IF_CONNECTION_DEDICATED;
-
-            if (!(flags & GAA_FLAG_SKIP_UNICAST)) 
-            {
-                IP_ADAPTER_UNICAST_ADDRESS *addr;               
-                
-                addr = heap_alloc_zero( sizeof(*addr) + sizeof(SOCKADDR_IN) );
-                addr->Next = NULL;
-                addr->Length = sizeof(*addr);
-                addr->Address.lpSockaddr = (SOCKADDR *)(addr + 1);
-                addr->Address.iSockaddrLength = sizeof(SOCKADDR_IN);
-                addr->Address.lpSockaddr->sa_family = AF_INET;
-                ((SOCKADDR_IN *)addr->Address.lpSockaddr)->sin_addr.s_addr = inet_addr( adapters_info[i].ip_address );
-                aa->FirstUnicastAddress = addr;
-            }
-            
-            if (flags & GAA_FLAG_INCLUDE_GATEWAYS) 
-            {
-                IP_ADAPTER_GATEWAY_ADDRESS *gw;
-                
-                gw = heap_alloc_zero( sizeof(*gw) + sizeof(SOCKADDR_IN) );
-                gw->Next = NULL;
-                gw->Length = sizeof(*gw);
-                gw->Address.lpSockaddr = (SOCKADDR *)(gw + 1);
-                gw->Address.iSockaddrLength = sizeof(SOCKADDR_IN);
-                gw->Address.lpSockaddr->sa_family = AF_INET;
-                ((SOCKADDR_IN *)gw->Address.lpSockaddr)->sin_addr.s_addr = inet_addr( adapters_info[i].gateway );
-                aa->FirstGatewayAddress = gw;
-            }
-            
-            aa++;
-        }
-        
-        aa[-1].Next = NULL;
-        return 0;
+        *size = needed;
+        err = ERROR_BUFFER_OVERFLOW;
     }
-    else 
-    {
-        IP_ADAPTER_ADDRESSES *info;
-        DWORD err, needed;
-    
-        err = adapters_addresses_alloc( family, flags, &info );
-        if (err) return err;
+    else
+        adapters_addresses_copy( aa, info );
 
-        needed = adapters_addresses_size( info );
-        if (!aa || *size < needed)
-        {
-            *size = needed;
-            err = ERROR_BUFFER_OVERFLOW;
-        }
-        else
-            adapters_addresses_copy( aa, info );
-
-        adapters_addresses_free( info );
-        return err;
-    }
+    adapters_addresses_free( info );
+    return err;
 }
 
 /******************************************************************
@@ -1845,97 +1636,43 @@ static int ifrow_cmp( const void *a, const void *b )
  */
 DWORD WINAPI GetIfTable( MIB_IFTABLE *table, ULONG *size, BOOL sort )
 {
-    int adapter_info_size;
-    struct adapter_info *adapters_info;
-    
-    TRACE( "table %p, size %p, sort %d\n", table, size, sort );
+    DWORD i, count, needed, err;
+    NET_LUID *keys;
+    struct nsi_ndis_ifinfo_rw *rw;
+    struct nsi_ndis_ifinfo_dynamic *dyn;
+    struct nsi_ndis_ifinfo_static *stat;
+
     if (!size) return ERROR_INVALID_PARAMETER;
-    
-    adapters_info = read_adapters_info_from_file( &adapter_info_size );
-    if (adapters_info != NULL && adapter_info_size > 0) 
-    {
-        DWORD i, needed;
-        
-        needed = FIELD_OFFSET( MIB_IFTABLE, table[adapter_info_size] );
-        
-        if (!table || *size < needed)
-        {
-            *size = needed;
-            return ERROR_INSUFFICIENT_BUFFER;
-        }
-        
-        table->dwNumEntries = adapter_info_size;
-        for (i = 0; i < adapter_info_size; i++) 
-        {
-            MIB_IFROW *row = table->table + i;
 
-            TRACE( "adapter %s %s %s %s %d\n", adapters_info[i].name, adapters_info[i].ip_address, adapters_info[i].netmask, adapters_info[i].gateway, adapters_info[i].active );
-            
-            wcscpy( row->wszName, device_tcpip );
-            strcpy( (char*)row->bDescr, adapters_info[i].name );
-            row->dwDescrLen = strlen( adapters_info[i].name );
-            row->dwIndex = 0;
-            row->dwType = IF_TYPE_IEEE80211;
-            row->dwMtu = 1500;
-            row->dwSpeed = 0;
-            row->dwPhysAddrLen = 0;
-            row->dwAdminStatus = 1;
-            row->dwOperStatus = adapters_info[i].active ? MIB_IF_OPER_STATUS_OPERATIONAL : MIB_IF_OPER_STATUS_NON_OPERATIONAL;
-            row->dwLastChange = 0;
-            row->dwInOctets = 0;
-            row->dwInUcastPkts = 0;
-            row->dwInNUcastPkts = 0;
-            row->dwInDiscards = 0;
-            row->dwInErrors = 0;
-            row->dwInUnknownProtos = 0;
-            row->dwOutOctets = 0;
-            row->dwOutUcastPkts = 0;
-            row->dwOutNUcastPkts = 0;
-            row->dwOutDiscards = 0;
-            row->dwOutErrors = 0;
-            row->dwOutQLen = 0;
-        }        
-        
-        return 0;
+    /* While this could be implemented on top of GetIfTable2(), it would require
+       an additional copy of the data */
+    err = NsiAllocateAndGetTable( 1, &NPI_MS_NDIS_MODULEID, NSI_NDIS_IFINFO_TABLE, (void **)&keys, sizeof(*keys),
+                                  (void **)&rw, sizeof(*rw), (void **)&dyn, sizeof(*dyn),
+                                  (void **)&stat, sizeof(*stat), &count, 0 );
+    if (err) return err;
+
+    needed = FIELD_OFFSET( MIB_IFTABLE, table[count] );
+
+    if (!table || *size < needed)
+    {
+        *size = needed;
+        err = ERROR_INSUFFICIENT_BUFFER;
+        goto err;
     }
-    else 
+
+    table->dwNumEntries = count;
+    for (i = 0; i < count; i++)
     {
-        DWORD i, count, needed, err;
-        NET_LUID *keys;
-        struct nsi_ndis_ifinfo_rw *rw;
-        struct nsi_ndis_ifinfo_dynamic *dyn;
-        struct nsi_ndis_ifinfo_static *stat;
-        
-        /* While this could be implemented on top of GetIfTable2(), it would require
-           an additional copy of the data */
-        err = NsiAllocateAndGetTable( 1, &NPI_MS_NDIS_MODULEID, NSI_NDIS_IFINFO_TABLE, (void **)&keys, sizeof(*keys),
-                                      (void **)&rw, sizeof(*rw), (void **)&dyn, sizeof(*dyn),
-                                      (void **)&stat, sizeof(*stat), &count, 0 );
-        if (err) return err;
+        MIB_IFROW *row = table->table + i;
 
-        needed = FIELD_OFFSET( MIB_IFTABLE, table[count] );
+        if_row_fill( row, rw + i, dyn + i, stat + i );
+    }
 
-        if (!table || *size < needed)
-        {
-            *size = needed;
-            err = ERROR_INSUFFICIENT_BUFFER;
-            goto err;
-        }
-
-        table->dwNumEntries = count;
-        for (i = 0; i < count; i++)
-        {
-            MIB_IFROW *row = table->table + i;
-
-            if_row_fill( row, rw + i, dyn + i, stat + i );
-        }
-
-        if (sort) qsort( table->table, count, sizeof(MIB_IFROW), ifrow_cmp );
+    if (sort) qsort( table->table, count, sizeof(MIB_IFROW), ifrow_cmp );
 
 err:
-        NsiFreeTable( keys, rw, dyn, stat );
-        return err;
-    }
+    NsiFreeTable( keys, rw, dyn, stat );
+    return err;
 }
 
 /******************************************************************
@@ -2329,125 +2066,72 @@ static int ipforward_row_cmp( const void *a, const void *b )
  */
 DWORD WINAPI GetIpForwardTable( MIB_IPFORWARDTABLE *table, ULONG *size, BOOL sort )
 {
-    int adapter_info_size;
-    struct adapter_info *adapters_info;
+    DWORD err, count, uni_count, needed, i, addr;
+    struct nsi_ipv4_forward_key *keys;
+    struct nsi_ip_forward_rw *rw;
+    struct nsi_ipv4_forward_dynamic *dyn;
+    struct nsi_ip_forward_static *stat;
+    struct nsi_ipv4_unicast_key *uni_keys = NULL;
 
     TRACE( "table %p, size %p, sort %d\n", table, size, sort );
     if (!size) return ERROR_INVALID_PARAMETER;
-    
-    adapters_info = read_adapters_info_from_file( &adapter_info_size );
-    if (adapters_info != NULL && adapter_info_size > 0) 
+
+    err = NsiAllocateAndGetTable( 1, &NPI_MS_IPV4_MODULEID, NSI_IP_FORWARD_TABLE, (void **)&keys, sizeof(*keys),
+                                  (void **)&rw, sizeof(*rw), (void **)&dyn, sizeof(*dyn),
+                                  (void **)&stat, sizeof(*stat), &count, 0 );
+    if (err) return err;
+
+    needed = FIELD_OFFSET( MIB_IPFORWARDTABLE, table[count] );
+
+    if (!table || *size < needed)
     {
-        DWORD needed;
-        MIB_IPFORWARDROW *row;
-        
-        needed = FIELD_OFFSET( MIB_IPFORWARDTABLE, table[3] );
-        
-        if (!table || *size < needed)
-        {
-            *size = needed;
-            return ERROR_INSUFFICIENT_BUFFER;
-        }
-        
-        table->dwNumEntries = 3;
-
-        row = table->table + 0;
-        ZeroMemory( row, sizeof(MIB_IPFORWARDROW) );
-        row->dwForwardDest = inet_addr( "127.0.0.0" );
-        ConvertLengthToIpv4Mask( 8, &row->dwForwardMask );
-        row->dwForwardNextHop = inet_addr( "127.0.0.1" );
-        row->dwForwardType = MIB_IPROUTE_TYPE_DIRECT;
-        row->dwForwardIfIndex = 1;
-        row->dwForwardProto = MIB_IPPROTO_LOCAL;
-        row->dwForwardMetric1 = -1;
-        
-        row = table->table + 1;
-        ZeroMemory( row, sizeof(MIB_IPFORWARDROW) );
-        row->dwForwardDest = inet_addr( "127.0.0.1" );
-        ConvertLengthToIpv4Mask( 32, &row->dwForwardMask );
-        row->dwForwardNextHop = inet_addr( "127.0.0.1" );
-        row->dwForwardType = MIB_IPROUTE_TYPE_DIRECT;
-        row->dwForwardIfIndex = 1;
-        row->dwForwardProto = MIB_IPPROTO_LOCAL;
-        row->dwForwardMetric1 = -1;
-        
-        row = table->table + 2;
-        ZeroMemory( row, sizeof(MIB_IPFORWARDROW) );
-        row->dwForwardDest = inet_addr( "127.255.255.255" );
-        ConvertLengthToIpv4Mask( 32, &row->dwForwardMask );
-        row->dwForwardNextHop = inet_addr( "127.0.0.1" );
-        row->dwForwardType = MIB_IPROUTE_TYPE_DIRECT;
-        row->dwForwardIfIndex = 1;
-        row->dwForwardProto = MIB_IPPROTO_LOCAL;
-        row->dwForwardMetric1 = -1;         
-        
-        return 0;
+        *size = needed;
+        err = ERROR_INSUFFICIENT_BUFFER;
+        goto err;
     }
-    else {
-        DWORD err, count, uni_count, needed, i, addr;
-        struct nsi_ipv4_forward_key *keys;
-        struct nsi_ip_forward_rw *rw;
-        struct nsi_ipv4_forward_dynamic *dyn;
-        struct nsi_ip_forward_static *stat;
-        struct nsi_ipv4_unicast_key *uni_keys = NULL;        
-        
-        err = NsiAllocateAndGetTable( 1, &NPI_MS_IPV4_MODULEID, NSI_IP_FORWARD_TABLE, (void **)&keys, sizeof(*keys),
-                                      (void **)&rw, sizeof(*rw), (void **)&dyn, sizeof(*dyn),
-                                      (void **)&stat, sizeof(*stat), &count, 0 );
-        if (err) return err;
 
-        needed = FIELD_OFFSET( MIB_IPFORWARDTABLE, table[count] );
+    err = NsiAllocateAndGetTable( 1, &NPI_MS_IPV4_MODULEID, NSI_IP_UNICAST_TABLE, (void **)&uni_keys, sizeof(*uni_keys),
+                                  NULL, 0, NULL, 0, NULL, 0, &uni_count, 0 );
+    if (err) goto err;
 
-        if (!table || *size < needed)
+    table->dwNumEntries = count;
+    for (i = 0; i < count; i++)
+    {
+        MIB_IPFORWARDROW *row = table->table + i;
+
+        row->dwForwardDest = keys[i].prefix.s_addr;
+        ConvertLengthToIpv4Mask( keys[i].prefix_len, &row->dwForwardMask );
+        row->dwForwardPolicy = 0;
+        row->dwForwardNextHop = keys[i].next_hop.s_addr;
+        row->dwForwardType = row->dwForwardNextHop ? MIB_IPROUTE_TYPE_INDIRECT : MIB_IPROUTE_TYPE_DIRECT;
+        if (!row->dwForwardNextHop) /* find the interface's addr */
         {
-            *size = needed;
-            err = ERROR_INSUFFICIENT_BUFFER;
-            goto err;
-        }
-
-        err = NsiAllocateAndGetTable( 1, &NPI_MS_IPV4_MODULEID, NSI_IP_UNICAST_TABLE, (void **)&uni_keys, sizeof(*uni_keys),
-                                      NULL, 0, NULL, 0, NULL, 0, &uni_count, 0 );
-        if (err) goto err;
-
-        table->dwNumEntries = count;
-        for (i = 0; i < count; i++)
-        {
-            MIB_IPFORWARDROW *row = table->table + i;
-
-            row->dwForwardDest = keys[i].prefix.s_addr;
-            ConvertLengthToIpv4Mask( keys[i].prefix_len, &row->dwForwardMask );
-            row->dwForwardPolicy = 0;
-            row->dwForwardNextHop = keys[i].next_hop.s_addr;
-            row->dwForwardType = row->dwForwardNextHop ? MIB_IPROUTE_TYPE_INDIRECT : MIB_IPROUTE_TYPE_DIRECT;
-            if (!row->dwForwardNextHop) /* find the interface's addr */
+            for (addr = 0; addr < uni_count; addr++)
             {
-                for (addr = 0; addr < uni_count; addr++)
+                if (uni_keys[addr].luid.Value == keys[i].luid.Value)
                 {
-                    if (uni_keys[addr].luid.Value == keys[i].luid.Value)
-                    {
-                        row->dwForwardNextHop = uni_keys[addr].addr.s_addr;
-                        break;
-                    }
+                    row->dwForwardNextHop = uni_keys[addr].addr.s_addr;
+                    break;
                 }
             }
-            row->dwForwardIfIndex = stat[i].if_index;
-            row->dwForwardProto = rw[i].protocol;
-            row->dwForwardAge = dyn[i].age;
-            row->dwForwardNextHopAS = 0;
-            row->dwForwardMetric1 = rw[i].metric; /* FIXME: add interface metric */
-            row->dwForwardMetric2 = 0;
-            row->dwForwardMetric3 = 0;
-            row->dwForwardMetric4 = 0;
-            row->dwForwardMetric5 = 0;
         }
-
-        if (sort) qsort( table->table, count, sizeof(MIB_IPFORWARDROW), ipforward_row_cmp );
-err:
-        NsiFreeTable( uni_keys, NULL, NULL, NULL );
-        NsiFreeTable( keys, rw, dyn, stat );
-
-        return err;
+        row->dwForwardIfIndex = stat[i].if_index;
+        row->dwForwardProto = rw[i].protocol;
+        row->dwForwardAge = dyn[i].age;
+        row->dwForwardNextHopAS = 0;
+        row->dwForwardMetric1 = rw[i].metric; /* FIXME: add interface metric */
+        row->dwForwardMetric2 = 0;
+        row->dwForwardMetric3 = 0;
+        row->dwForwardMetric4 = 0;
+        row->dwForwardMetric5 = 0;
     }
+
+    if (sort) qsort( table->table, count, sizeof(MIB_IPFORWARDROW), ipforward_row_cmp );
+err:
+    NsiFreeTable( uni_keys, NULL, NULL, NULL );
+    NsiFreeTable( keys, rw, dyn, stat );
+
+    return err;
 }
 
 /******************************************************************
