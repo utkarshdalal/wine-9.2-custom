@@ -1039,37 +1039,6 @@ static void *unwind_full_data( ULONG_PTR base, ULONG_PTR pc, RUNTIME_FUNCTION *f
     return NULL;
 }
 
-
-/**********************************************************************
- *              RtlVirtualUnwind   (NTDLL.@)
- */
-PVOID WINAPI RtlVirtualUnwind( ULONG type, ULONG_PTR base, ULONG_PTR pc,
-                               RUNTIME_FUNCTION *func, CONTEXT *context,
-                               PVOID *handler_data, ULONG_PTR *frame_ret,
-                               KNONVOLATILE_CONTEXT_POINTERS *ctx_ptr )
-{
-    void *handler;
-
-    TRACE( "type %lx pc %I64x sp %I64x func %I64x\n", type, pc, context->Sp, base + func->BeginAddress );
-
-    *handler_data = NULL;
-
-    context->Pc = 0;
-    if (func->Flag)
-        handler = unwind_packed_data( base, pc, func, context, ctx_ptr );
-    else
-        handler = unwind_full_data( base, pc, func, context, handler_data, ctx_ptr );
-
-    TRACE( "ret: pc=%I64x lr=%I64x sp=%I64x handler=%p\n", context->Pc, context->Lr, context->Sp, handler );
-    if (!context->Pc)
-    {
-        context->Pc = context->Lr;
-        context->ContextFlags |= CONTEXT_UNWOUND_TO_CALL;
-    }
-    *frame_ret = context->Sp;
-    return handler;
-}
-
 /**********************************************************************
  *           call_consolidate_callback
  *

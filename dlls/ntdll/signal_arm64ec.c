@@ -1769,19 +1769,6 @@ void CDECL RtlRestoreContext( CONTEXT *context, EXCEPTION_RECORD *rec )
 }
 
 
-/**********************************************************************
- *              RtlVirtualUnwind   (NTDLL.@)
- */
-PVOID WINAPI RtlVirtualUnwind( ULONG type, ULONG64 base, ULONG64 pc,
-                               RUNTIME_FUNCTION *function, CONTEXT *context,
-                               PVOID *data, ULONG64 *frame_ret,
-                               KNONVOLATILE_CONTEXT_POINTERS *ctx_ptr )
-{
-    FIXME( "not implemented\n" );
-    return NULL;
-}
-
-
 /*******************************************************************
  *		RtlUnwindEx (NTDLL.@)
  */
