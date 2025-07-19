@@ -1926,7 +1926,7 @@ typedef struct _DISPATCHER_CONTEXT
     PCONTEXT              ContextRecord;
     PEXCEPTION_ROUTINE    LanguageHandler;
     PVOID                 HandlerData;
-    PUNWIND_HISTORY_TABLE HistoryTable;
+    struct _UNWIND_HISTORY_TABLE *HistoryTable;
     DWORD                 ScopeIndex;
     DWORD                 Fill0;
 } DISPATCHER_CONTEXT, *PDISPATCHER_CONTEXT;
@@ -1951,7 +1951,7 @@ typedef struct _DISPATCHER_CONTEXT
     PCONTEXT              ContextRecord;
     PEXCEPTION_ROUTINE    LanguageHandler;
     PVOID                 HandlerData;
-    PUNWIND_HISTORY_TABLE HistoryTable;
+    struct _UNWIND_HISTORY_TABLE *HistoryTable;
     DWORD                 ScopeIndex;
     BOOLEAN               ControlPcIsUnwound;
     PBYTE                 NonVolatileRegisters;
@@ -1977,7 +1977,7 @@ typedef struct _DISPATCHER_CONTEXT
     PCONTEXT              ContextRecord;
     PEXCEPTION_ROUTINE    LanguageHandler;
     PVOID                 HandlerData;
-    PUNWIND_HISTORY_TABLE HistoryTable;
+    struct _UNWIND_HISTORY_TABLE *HistoryTable;
     DWORD                 ScopeIndex;
     BOOLEAN               ControlPcIsUnwound;
     PBYTE                 NonVolatileRegisters;
